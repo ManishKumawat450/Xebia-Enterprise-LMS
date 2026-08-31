@@ -86,11 +86,21 @@ export const Evaluation = () => {
     setQuestionRemarks((prev) => ({ ...prev, [qId]: value }));
   };
 
-  const handleSubmitEvaluation = () => {
+  const handleSubmitEvaluation = async () => {
     if (!selectedSubId) return;
-    evaluateSubmission(selectedSubId, questionMarks, questionRemarks, overallRemarks.trim());
-    toast.add("Evaluation Published! Student notified instantly.", "success");
-    setSelectedSubId(null);
+    try {
+      await evaluateSubmission(
+        selectedSubId,
+        questionMarks,
+        questionRemarks,
+        overallRemarks.trim(),
+      );
+      toast.add("Evaluation Published! Student notified instantly.", "success");
+      setSelectedSubId(null);
+    } catch (err) {
+      console.error("Evaluation save failed:", err);
+      toast.add("Failed to save evaluation to server. Please try again.", "error");
+    }
   };
 
   const handleAutoEvaluate = async () => {

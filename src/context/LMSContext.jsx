@@ -727,51 +727,69 @@ export const LMSProvider = ({ children }) => {
   };
 
   // Teacher manual evaluation
-  const evaluateSubmission = (submissionId, questionMarks, questionRemarks, overallRemarks) => {
+  const evaluateSubmission = async (submissionId, questionMarks, questionRemarks, overallRemarks) => {
     let finalStudentId = "";
     let finalPercentage = 0;
     let asTitle = "";
+    let updatedSubmission = null;
 
-    setSubmissions((prev) =>
-      prev.map((sub) => {
-        if (sub.id === submissionId) {
-          const asObj = assessments.find((a) => a.id === sub.assessmentId);
-          asTitle = asObj?.title || "Assessment";
-          if (!asObj) return sub;
+    const updatedSubmissions = submissions.map((sub) => {
+      if (sub.id !== submissionId) return sub;
 
-          const updatedAnswers = sub.answers.map((ans) => {
-            const qId = ans.questionId;
-            const q = asObj.questions.find((quest) => quest.id === qId);
-            return {
-              ...ans,
-              marksAwarded:
-                questionMarks[qId] !== undefined ? questionMarks[qId] : ans.marksAwarded || 0,
-              remarks:
-                questionRemarks[qId] !== undefined ? questionRemarks[qId] : ans.remarks || "",
-              isReviewed: true,
-            };
-          });
+      const asObj = assessments.find((a) => a.id === sub.assessmentId);
+      asTitle = asObj?.title || "Assessment";
+      if (!asObj) return sub;
 
-          // Sum total manual + auto scores
-          const totalScore = updatedAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
-          const percentage = asObj.marks > 0 ? Math.round((totalScore / asObj.marks) * 100) : 0;
+      const updatedAnswers = sub.answers.map((ans) => {
+        const qId = ans.questionId;
+        return {
+          ...ans,
+          marksAwarded:
+            questionMarks[qId] !== undefined ? questionMarks[qId] : ans.marksAwarded || 0,
+          remarks:
+            questionRemarks[qId] !== undefined ? questionRemarks[qId] : ans.remarks || "",
+          isReviewed: true,
+        };
+      });
 
-          finalStudentId = sub.studentId;
-          finalPercentage = percentage;
+      // Sum total manual + auto scores
+      const totalScore = updatedAnswers.reduce((sum, ans) => sum + (ans.marksAwarded || 0), 0);
+      const percentage = asObj.marks > 0 ? Math.round((totalScore / asObj.marks) * 100) : 0;
 
-          return {
-            ...sub,
-            answers: updatedAnswers,
-            score: totalScore,
-            percentage,
-            isEvaluated: true,
-            remarks: overallRemarks,
-            evaluatedBy: currentUser?.id || "T1",
-          };
+      finalStudentId = sub.studentId;
+      finalPercentage = percentage;
+
+      updatedSubmission = {
+        ...sub,
+        answers: updatedAnswers,
+        score: totalScore,
+        percentage,
+        isEvaluated: true,
+        remarks: overallRemarks,
+        evaluatedBy: currentUser?.id || "T1",
+      };
+      return updatedSubmission;
+    });
+
+    setSubmissions(updatedSubmissions);
+
+    // Persist the grading to the backend so it survives a page refresh
+    if (updatedSubmission) {
+      try {
+        const saved = await SubmissionService.updateSubmission(
+          updatedSubmission.id,
+          updatedSubmission,
+        );
+        if (saved && saved.id) {
+          setSubmissions((prev) =>
+            prev.map((s) => (s.id === saved.id ? { ...s, ...saved } : s)),
+          );
         }
-        return sub;
-      }),
-    );
+      } catch (err) {
+        console.error("Failed to save grading to backend:", err);
+        throw err;
+      }
+    }
 
     // Update student performance averages
     if (finalStudentId) {
