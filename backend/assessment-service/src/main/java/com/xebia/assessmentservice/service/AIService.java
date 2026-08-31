@@ -30,7 +30,7 @@ public class AIService {
         message.put("content", "Generate a professional assessment description and instructions for a test on: " + topic);
         
         Map<String, Object> requestBody = new HashMap<>();
-        requestBody.put("model", "llama-3.3-70b-versatile");
+        requestBody.put("model", "openai/gpt-oss-120b");
         requestBody.put("messages", List.of(message));
         requestBody.put("temperature", 0.7);
         
