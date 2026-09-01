@@ -125,6 +125,13 @@ export const UserService = {
   deleteUser: (id) => fetchApi(`/v1/users/${id}`, { method: "DELETE" }),
 };
 
+export const FeedbackService = {
+  submitFeedback: (data) =>
+    fetchApi("/v1/feedback", { method: "POST", body: JSON.stringify(data) }),
+  getFeedback: (studentId) =>
+    fetchApi(`/v1/feedback${studentId ? "?studentId=" + studentId : ""}`),
+};
+
 export const TrainerCascadeService = {
   deleteBatchesByCreator: (createdBy) =>
     fetchApi(`/v1/batches/created-by/${createdBy}`, { method: "DELETE" }),

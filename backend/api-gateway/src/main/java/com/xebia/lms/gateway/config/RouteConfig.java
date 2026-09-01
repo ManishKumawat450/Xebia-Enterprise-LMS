@@ -22,6 +22,7 @@ public class RouteConfig {
                 .route("course-service-enrollments", route -> route.path("/api/enrollments", "/api/enrollments/**").filters(filter -> filter.stripPrefix(1)).uri(serviceUrl("course", "http://course-service:8084")))
                 .route("course-service-progress", route -> route.path("/api/progress", "/api/progress/**").filters(filter -> filter.stripPrefix(1)).uri(serviceUrl("course", "http://course-service:8084")))
                 .route("user-service", route -> route.path("/api/v1/users", "/api/v1/users/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))
+                .route("user-service-feedback", route -> route.path("/api/v1/feedback", "/api/v1/feedback/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))
                 .route("batch-service", route -> route.path("/api/v1/batches", "/api/v1/batches/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("batch", "http://batch-service:8085")))
                 .route("batch-service-allocations", route -> route.path("/api/v1/allocations", "/api/v1/allocations/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("batch", "http://batch-service:8085")))
                 .route("assessment-service-assessments", route -> route.path("/api/v1/assessments", "/api/v1/assessments/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("assessment", "http://assessment-service:8086")))

@@ -4,7 +4,7 @@ import { useState, useEffect, useMemo } from "react";
 import { motion } from "framer-motion";
 import { clsx } from "clsx";
 import { useLMS } from "@/context/LMSContext";
-import { AllocationService, UserService } from "@/services/api";
+import { AllocationService, UserService, FeedbackService } from "@/services/api";
 import { useAppStore } from "@/admin/store/useAppStore";
 
 export const Route = createFileRoute("/student/feedback")({
@@ -19,6 +19,7 @@ function FeedbackPage() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [selectedBatchId, setSelectedBatchId] = useState("");
   const [selectedTrainer, setSelectedTrainer] = useState("");
+  const [selectedTrainerId, setSelectedTrainerId] = useState("");
   const [feedbackText, setFeedbackText] = useState("");
 
   const [allocations, setAllocations] = useState([]);
@@ -46,27 +47,55 @@ function FeedbackPage() {
 
   // When batch is selected, auto-fill trainer from allocation
   useEffect(() => {
-    if (!selectedBatchId) { setSelectedTrainer(""); return; }
+    if (!selectedBatchId) {
+      setSelectedTrainer("");
+      setSelectedTrainerId("");
+      return;
+    }
     const batchAlloc = allocations.find((a) => a.batchId === selectedBatchId);
     if (batchAlloc) {
       const trainer = trainers.find((t) => t.id === batchAlloc.trainerId);
-      if (trainer) { setSelectedTrainer(trainer.name); return; }
+      if (trainer) {
+        setSelectedTrainer(trainer.name);
+        setSelectedTrainerId(trainer.id);
+        return;
+      }
     }
     setSelectedTrainer("");
+    setSelectedTrainerId("");
   }, [selectedBatchId, allocations, trainers]);
 
-  const handleSubmit = (e) => {
+  const handleSubmit = async (e) => {
     e.preventDefault();
-    if (rating === 0) return;
+    if (rating === 0) {
+      addToast("Please select a rating", "warning");
+      return;
+    }
     setIsSubmitting(true);
-    setTimeout(() => {
+    try {
+      const batch = batches.find((b) => b.id === selectedBatchId);
+      await FeedbackService.submitFeedback({
+        studentId: currentUser?.id,
+        studentName: currentUser?.name,
+        trainerId: selectedTrainerId,
+        trainerName: selectedTrainer,
+        batchId: selectedBatchId,
+        batchName: batch?.name || "",
+        rating,
+        comment: feedbackText.trim(),
+      });
       addToast("Feedback submitted successfully! Thank you.", "success");
       setRating(0);
       setFeedbackText("");
       setSelectedBatchId("");
       setSelectedTrainer("");
+      setSelectedTrainerId("");
+    } catch (err) {
+      console.error("Feedback submission failed:", err);
+      addToast(err.message || "Failed to submit feedback. Please try again.", "error");
+    } finally {
       setIsSubmitting(false);
-    }, 600);
+    }
   };
 
   const trainersMap = useMemo(() => {
