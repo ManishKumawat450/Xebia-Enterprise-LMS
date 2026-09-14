@@ -7,6 +7,7 @@ import org.springframework.stereotype.Service;
 
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Optional;
 
 @Service
 public class UserService {
@@ -23,6 +24,25 @@ public class UserService {
 
     public User createUser(User user) {
         return userRepository.save(user);
+    }
+
+    public Optional<User> getUserById(String id) {
+        return userRepository.findById(id);
+    }
+
+    /**
+     * Partial update: only non-null fields from the incoming payload are merged,
+     * so callers can PATCH-like semantics over PUT without clobbering the rest.
+     * id, role and the evaluation stats are intentionally not editable here.
+     */
+    public User updateUser(String id, User patch) {
+        User existing = userRepository.findById(id)
+                .orElseThrow(() -> new IllegalArgumentException("User not found: " + id));
+        if (patch.getName() != null) existing.setName(patch.getName());
+        if (patch.getEmail() != null) existing.setEmail(patch.getEmail());
+        if (patch.getDepartment() != null) existing.setDepartment(patch.getDepartment());
+        if (patch.getAvatar() != null) existing.setAvatar(patch.getAvatar());
+        return userRepository.save(existing);
     }
 
     public void deleteUser(String id) {

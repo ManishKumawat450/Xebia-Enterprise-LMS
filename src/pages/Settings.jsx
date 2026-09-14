@@ -106,20 +106,23 @@ export const Settings = () => {
     processFile(file);
   };
 
-  const handleSaveProfile = (e) => {
+  const handleSaveProfile = async (e) => {
     e.preventDefault();
     if (!name.trim()) {
       toast.add("Name cannot be blank", "warning");
       return;
     }
 
-    updateProfile({
-      name: name.trim(),
-      email: email.trim(),
-      avatar: selectedAvatar,
-    });
-
-    toast.add("Profile details updated successfully!", "success");
+    try {
+      await updateProfile({
+        name: name.trim(),
+        email: email.trim(),
+        avatar: selectedAvatar,
+      });
+      toast.add("Profile details updated successfully!", "success");
+    } catch (err) {
+      toast.add(err.message || "Failed to update profile", "error");
+    }
   };
 
   const handleUpdatePassword = (e) => {

@@ -121,7 +121,10 @@ export const CourseService = {
 
 export const UserService = {
   getUsers: (role) => fetchApi(`/v1/users${role ? "?role=" + role : ""}`),
+  getUser: (id) => fetchApi(`/v1/users/${id}`),
   createUser: (data) => fetchApi("/v1/users", { method: "POST", body: JSON.stringify(data) }),
+  updateUser: (id, data) =>
+    fetchApi(`/v1/users/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteUser: (id) => fetchApi(`/v1/users/${id}`, { method: "DELETE" }),
 };
 

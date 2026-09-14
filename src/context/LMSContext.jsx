@@ -829,9 +829,25 @@ export const LMSProvider = ({ children }) => {
     setNotifications((prev) => prev.map((n) => ({ ...n, isRead: true })));
   };
 
-  const updateProfile = (updatedUser) => {
+  const updateProfile = async (updatedUser) => {
     if (!currentUser) return;
     const merged = { ...currentUser, ...updatedUser };
+
+    // Persist to the users table first — no more localStorage-only edits.
+    if (merged.id) {
+      try {
+        await UserService.updateUser(merged.id, {
+          name: merged.name,
+          email: merged.email,
+          avatar: merged.avatar,
+          department: merged.department,
+        });
+      } catch (err) {
+        console.error("Failed to persist profile update to backend:", err);
+        throw new Error("Profile could not be saved to the server. Please try again.");
+      }
+    }
+
     setCurrentUser(merged);
 
     if (merged.role === "teacher") {
