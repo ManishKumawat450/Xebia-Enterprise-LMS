@@ -6,6 +6,7 @@ import {
   AssessmentService,
   SubmissionService,
   AllocationService,
+  NotificationService,
 } from "../services/api";
 
 const LMSContext = createContext(undefined);
@@ -64,6 +65,15 @@ export const LMSProvider = ({ children }) => {
         setTeachers(teacherList);
         setStudents(studentList);
         setBatches(b);
+
+        // Load notifications from the backend (falls back to the local cache
+        // copy below if the service is unreachable).
+        try {
+          const n = await NotificationService.getAll();
+          if (Array.isArray(n)) setNotifications(n);
+        } catch (e) {
+          console.error("Failed to load notifications from backend:", e);
+        }
 
         // Cache to localStorage for instant login page load
         try {
@@ -220,6 +230,21 @@ export const LMSProvider = ({ children }) => {
 
   useEffect(() => {
     localStorage.setItem("notifications", JSON.stringify(notifications));
+  }, [notifications]);
+
+  // Mirror the notifications list to the backend so read state and new
+  // notifications survive across browsers/devices. Skipped on mount (the
+  // initial load above is authoritative); failures fall back to the
+  // localStorage cache without blocking the UI.
+  const notificationsSyncedOnce = React.useRef(false);
+  useEffect(() => {
+    if (!notificationsSyncedOnce.current) {
+      notificationsSyncedOnce.current = true;
+      return;
+    }
+    NotificationService.sync(notifications).catch((e) =>
+      console.error("Failed to sync notifications to backend:", e),
+    );
   }, [notifications]);
 
   useEffect(() => {

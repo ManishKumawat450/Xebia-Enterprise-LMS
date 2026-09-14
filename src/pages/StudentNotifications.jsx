@@ -32,6 +32,18 @@ export default function StudentNotifications() {
     localStorage.setItem("notifications", JSON.stringify(localNotifications));
   }, [localNotifications, setNotifications]);
 
+  // Hydration guard: on SSR/first paint `notifications` from context may not
+  // be loaded yet, so the local copy starts empty. Adopt the loaded list once
+  // instead of rendering nothing (and previously overwriting the cache with []).
+  const seededFromContext = React.useRef(false);
+  useEffect(() => {
+    if (seededFromContext.current) return;
+    if (notifications.length > 0 && localNotifications.length === 0) {
+      setLocalNotifications(notifications);
+      seededFromContext.current = true;
+    }
+  }, [notifications, localNotifications.length]);
+
   const myNotifications = useMemo(() => {
     let result = localNotifications.filter(
       (n) => !n.recipientId || n.recipientId === currentUser?.id || n.type === "system"

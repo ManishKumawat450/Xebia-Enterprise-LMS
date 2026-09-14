@@ -128,6 +128,15 @@ export const UserService = {
   deleteUser: (id) => fetchApi(`/v1/users/${id}`, { method: "DELETE" }),
 };
 
+export const NotificationService = {
+  getAll: () => fetchApi("/v1/notifications"),
+  sync: (notifications) =>
+    fetchApi("/v1/notifications/sync", {
+      method: "POST",
+      body: JSON.stringify(notifications),
+    }),
+};
+
 export const FeedbackService = {
   submitFeedback: (data) =>
     fetchApi("/v1/feedback", { method: "POST", body: JSON.stringify(data) }),
