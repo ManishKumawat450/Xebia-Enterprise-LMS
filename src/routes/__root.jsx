@@ -14,6 +14,7 @@ import appCss from "../styles.css?url";
 import { reportLovableError } from "../lib/lovable-error-reporting";
 import "@/admin/index.css";
 import { LMSProvider } from "../context/LMSContext";
+import { Toaster } from "@/components/ui/sonner";
 import React from "react";
 
 function NotFoundComponent() {
@@ -200,6 +201,9 @@ function RootComponent() {
     <QueryClientProvider client={queryClient}>
       <LMSProvider>
         <Outlet />
+        {/* Global sonner host — without this, toast.* calls on the
+            student/trainer portals were created but never rendered. */}
+        <Toaster position="top-right" richColors closeButton />
       </LMSProvider>
     </QueryClientProvider>
   );
