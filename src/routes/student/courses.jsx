@@ -32,6 +32,7 @@ import { useQuery } from "@tanstack/react-query";
 import { CourseService, EnrollmentService, AuthService, CategoryService } from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
+import { useLMS } from "@/context/LMSContext";
 import { toast } from "sonner";
 // jsPDF and html2canvas loaded dynamically to avoid SSR issues
 
@@ -42,7 +43,7 @@ export const Route = createFileRoute("/student/courses")({
 const BRAND = "#6C1D5F";
 const TEAL = "#01AC9F";
 
-function CertificateModal({ course, onClose }) {
+function CertificateModal({ course, student, onClose }) {
   const certificateRef = useRef(null);
   const [isDownloading, setIsDownloading] = useState(false);
 
@@ -51,7 +52,7 @@ function CertificateModal({ course, onClose }) {
     month: "long",
     year: "numeric",
   });
-  const certId = `XEB-${course.id.toUpperCase()}-2026-${studentProfile.id}`;
+  const certId = `XEB-${course.id.toUpperCase()}-2026-${student?.id ?? "UNKNOWN"}`;
 
   const handleDownloadPDF = () => {
     window.print();
@@ -236,7 +237,7 @@ function CertificateModal({ course, onClose }) {
                     className="font-bold italic leading-none text-primary font-serif"
                     style={{ fontSize: "6.5cqw" }}
                   >
-                    {studentProfile.name}
+                    {student?.name ?? "Student"}
                   </h2>
                   <div
                     className="mx-auto mt-2"
@@ -336,6 +337,7 @@ function CertificateModal({ course, onClose }) {
 
 function MyCourses() {
   const router = useRouter();
+  const { currentUser } = useLMS();
   const [search, setSearch] = useState("");
   const [favorites, setFavorites] = useState(new Set());
   const [filterFavorites, setFilterFavorites] = useState("All Courses");
@@ -748,7 +750,7 @@ function MyCourses() {
       {/* Stats Cards */}
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-3">
         {[
-          { label: "Enrolled Courses", value: courses.length, sub: "Total enrollments", icon: BookOpen, bg: "bg-[#6C1D5F]/10", color: "text-[#6C1D5F]" },
+          { label: "Enrolled Courses", value: courses.filter((c) => c.isEnrolled).length, sub: "Total enrollments", icon: BookOpen, bg: "bg-[#6C1D5F]/10", color: "text-[#6C1D5F]" },
           { label: "In Progress", value: inProgress.length, sub: "Ongoing courses", icon: PlayCircle, bg: "bg-[#FF6200]/10", color: "text-[#FF6200]" },
           { label: "Completed", value: completed.length, sub: "Finished courses", icon: Award, bg: "bg-[#01AC9F]/10", color: "text-[#01AC9F]" },
         ].map((kpi, i) => (
@@ -879,7 +881,13 @@ function MyCourses() {
 
       {/* Certificate Modal */}
       <AnimatePresence>
-        {certCourse && <CertificateModal course={certCourse} onClose={() => setCertCourse(null)} />}
+        {certCourse && (
+          <CertificateModal
+            course={certCourse}
+            student={currentUser}
+            onClose={() => setCertCourse(null)}
+          />
+        )}
       </AnimatePresence>
     </div>
   );
