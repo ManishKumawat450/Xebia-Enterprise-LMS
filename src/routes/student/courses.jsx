@@ -29,7 +29,12 @@ import {
   SelectValue,
 } from "@/components/ui/select";
 import { useQuery } from "@tanstack/react-query";
-import { CourseService, EnrollmentService, AuthService, CategoryService } from "@/services/api";
+import {
+  CourseService,
+  EnrollmentService,
+  CategoryService,
+  ProgressService,
+} from "@/services/api";
 import { motion, AnimatePresence } from "framer-motion";
 import { clsx } from "clsx";
 import { useLMS } from "@/context/LMSContext";
@@ -358,11 +363,33 @@ function MyCourses() {
   const allCourses = allCoursesData || [];
   const enrolledCourses = enrolledCoursesData || [];
 
+  // Real per-course completion from the progress service. Without this the
+  // cards always showed 0% progress (the Course entity has no progress field),
+  // which also made the "View Certificate" button unreachable.
+  const { data: progressMap } = useQuery({
+    queryKey: ["student-course-progress", enrolledCourses.map((c) => c.id).join(",")],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        enrolledCourses.map(async (c) => {
+          try {
+            const p = await ProgressService.getCourseProgress(c.id);
+            return [String(c.id), p?.progressPercentage ?? 0];
+          } catch {
+            return [String(c.id), 0];
+          }
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: enrolledCourses.length > 0,
+  });
+
   const courses = allCourses.map((course) => {
     const enrolled = enrolledCourses.find((e) => String(e.id) === String(course.id));
+    const realProgress = enrolled ? (progressMap?.[String(course.id)] ?? 0) : 0;
     return {
       ...course,
-      progress: enrolled ? enrolled.progress || course.progress || 0 : 0,
+      progress: realProgress || enrolled?.progress || course.progress || 0,
       isEnrolled: !!enrolled,
     };
   });

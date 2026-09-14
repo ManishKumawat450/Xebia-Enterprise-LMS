@@ -16,7 +16,7 @@ public class Answer {
     private String questionId;
     @Column(columnDefinition = "TEXT")
     private String answer;
-    private Integer marksAwarded;
+    private Double marksAwarded;
     @Column(columnDefinition = "TEXT")
     private String remarks;
 }

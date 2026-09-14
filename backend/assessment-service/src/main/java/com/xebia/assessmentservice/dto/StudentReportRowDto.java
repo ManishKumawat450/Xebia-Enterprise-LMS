@@ -11,7 +11,7 @@ public class StudentReportRowDto {
     private String email;
     private String batch;
     private String course;
-    private Integer score;
+    private Double score;
     private Integer percentage;
     private String passFail;
     private String attemptStatus;

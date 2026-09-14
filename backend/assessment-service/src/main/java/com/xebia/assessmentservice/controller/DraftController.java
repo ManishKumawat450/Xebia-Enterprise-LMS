@@ -22,4 +22,9 @@ public class DraftController {
     public Object getDraft(@PathVariable String studentId, @PathVariable String assessmentId) {
         return cacheService.getDraft(studentId, assessmentId);
     }
+
+    @DeleteMapping("/{studentId}/{assessmentId}")
+    public void deleteDraft(@PathVariable String studentId, @PathVariable String assessmentId) {
+        cacheService.deleteDraft(studentId, assessmentId);
+    }
 }

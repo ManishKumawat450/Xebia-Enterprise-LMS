@@ -23,6 +23,18 @@ export const LMSProvider = ({ children }) => {
   const [codingLeaderboard, setCodingLeaderboard] = useState([]);
   const [notifications, setNotifications] = useState([]);
 
+  // Assessments are cached per viewer role: students receive an answer-key-
+  // stripped view, so a shared cache key would leak a student's stripped copy
+  // into a trainer/admin session (breaking grading) or vice versa.
+  const assessmentCacheKey = () => {
+    try {
+      const s = JSON.parse(localStorage.getItem("session") || "null");
+      return s?.role ? `lms_assessments_${s.role}` : "lms_assessments";
+    } catch {
+      return "lms_assessments";
+    }
+  };
+
   // Hydrate from localStorage after mount to avoid SSR hydration mismatch
   useEffect(() => {
     const load = (key) => {
@@ -34,7 +46,7 @@ export const LMSProvider = ({ children }) => {
     setTeachers(load("lms_teachers"));
     setBatches(load("lms_batches"));
     setStudents(load("lms_students"));
-    setAssessments(load("lms_assessments"));
+    setAssessments(load(assessmentCacheKey()));
     setSubmissions(load("lms_submissions"));
     setCodingSubmissions(load("codingSubmissions"));
     setCodingLeaderboard(load("codingLeaderboard"));
@@ -89,7 +101,13 @@ export const LMSProvider = ({ children }) => {
           return updated || null;
         });
 
-        let a = await AssessmentService.getAssessments();
+        // Students load the answer-key-stripped view; trainers/admins keep the
+        // full payload (builder editing + evaluation need correctAnswer).
+        const viewerRole = currentUser?.role;
+        let a =
+          viewerRole === "student"
+            ? await AssessmentService.getAssessmentsForStudents()
+            : await AssessmentService.getAssessments();
         if (!Array.isArray(a)) a = [];
         setAssessments(a);
 
@@ -101,7 +119,7 @@ export const LMSProvider = ({ children }) => {
           );
           const merged = [...s, ...localInProgress];
           try {
-            localStorage.setItem("lms_assessments", JSON.stringify(a));
+            localStorage.setItem(assessmentCacheKey(), JSON.stringify(a));
             localStorage.setItem("lms_submissions", JSON.stringify(merged));
           } catch (e) { /* quota exceeded is fine */ }
           return merged;
@@ -578,7 +596,7 @@ export const LMSProvider = ({ children }) => {
   };
 
   // Student Assessment Taking
-  const startAssessment = (assessmentId, studentId) => {
+  const startAssessment = async (assessmentId, studentId) => {
     // Check if there is already an in_progress submission
     const existing = submissions.find(
       (s) => s.assessmentId === assessmentId && s.studentId === studentId,
@@ -601,12 +619,23 @@ export const LMSProvider = ({ children }) => {
       isEvaluated: false,
     };
 
-    setSubmissions((prev) => [newSub, ...prev]);
-    SubmissionService.createSubmission(newSub).catch(console.error);
-    return newSub;
+    // Await the in_progress row so a later submit PUT always finds it;
+    // surface failures instead of silently continuing (caller can retry).
+    try {
+      const created = await SubmissionService.createSubmission(newSub);
+      const finalSub =
+        created && created.id
+          ? { ...newSub, ...created, answers: created.answers || newSub.answers }
+          : newSub;
+      setSubmissions((prev) => [finalSub, ...prev]);
+      return finalSub;
+    } catch (err) {
+      console.error("Failed to create submission record:", err);
+      throw new Error("Could not start the attempt — the server is unreachable. Please retry.");
+    }
   };
 
-  const submitAssessment = (submissionId, answers) => {
+  const submitAssessment = async (submissionId, answers) => {
     const index = submissions.findIndex((s) => s.id === submissionId);
     if (index === -1) return null;
 
@@ -689,7 +718,10 @@ export const LMSProvider = ({ children }) => {
       );
     isEvaluated = !needsManualGrading;
 
-    const percentage = asObj.marks > 0 ? Math.round((score / asObj.marks) * 100) : 0;
+    // Floor matches the backend's integer percentage semantics (int division),
+    // so the score shown right after submit equals the score after refresh.
+    const percentage =
+      asObj.marks > 0 ? Math.floor((score / asObj.marks) * 100) : 0;
     const startedTime = sub.startedAt ? new Date(sub.startedAt).getTime() : Date.now();
     const timeTakenSecs = Math.max(1, Math.round((Date.now() - startedTime) / 1000));
 
@@ -704,12 +736,25 @@ export const LMSProvider = ({ children }) => {
       isEvaluated,
     };
 
-    // Make the API call OUTSIDE the setSubmissions updater function!
-    SubmissionService.updateSubmission(finalSubmission.id, finalSubmission).catch(console.error);
+    // Persist FIRST — the caller only reports success when the server has it.
+    // If the PUT fails (e.g. the in_progress row never got created), fall back
+    // to creating the full submission so the student's answers are not lost.
+    try {
+      await SubmissionService.updateSubmission(finalSubmission.id, finalSubmission);
+    } catch (err) {
+      console.error("Submission PUT failed, attempting create fallback:", err);
+      try {
+        await SubmissionService.createSubmission(finalSubmission);
+      } catch (err2) {
+        throw new Error(
+          "Your answers are kept on this page, but the server could not save them. Use Retry to submit again.",
+        );
+      }
+    }
 
     setSubmissions((currentSubs) => {
       const idx = currentSubs.findIndex((s) => s.id === submissionId);
-      if (idx === -1) return currentSubs;
+      if (idx === -1) return [finalSubmission, ...currentSubs];
       const newSubs = [...currentSubs];
       newSubs[idx] = finalSubmission;
       return newSubs;

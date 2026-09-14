@@ -2,6 +2,7 @@ import React, { useState, useEffect, useRef } from "react";
 import { useParams, useNavigate } from "@tanstack/react-router";
 import { useLMS } from "../context/LMSContext";
 import { toast } from "../components/Toast";
+import { DraftService } from "../services/api";
 import {
   Clock,
   ArrowRight,
@@ -65,27 +66,54 @@ export const TakeQuiz = () => {
   const containerRef = useRef(null);
   const initAttemptRef = useRef(false);
 
-  // Initialize assessment attempt
+  // Server save status for the in_progress attempt ("ok" | "error" | "saving")
+  const [startStatus, setStartStatus] = useState("saving");
+  const startAttempt = () => {
+    if (!assessment || !currentUser) return;
+    setStartStatus("saving");
+    startAssessment(assessment.id, currentUser.id)
+      .then((attempt) => {
+        setSubmission(attempt);
+        setStartStatus("ok");
+
+        // Hydrate existing draft answers if present
+        const existingAnswers = {};
+        (attempt.answers || []).forEach((ans) => {
+          existingAnswers[ans.questionId] = ans.answer;
+        });
+        setAnswers(existingAnswers);
+
+        // Restore a server draft (saved when the page was left mid-attempt)
+        DraftService.getDraft(currentUser.id, assessment.id)
+          .then((draft) => {
+            if (draft?.answers?.length) {
+              setAnswers((prev) => {
+                const next = { ...prev };
+                draft.answers.forEach((a) => {
+                  if ((next[a.questionId] === undefined || next[a.questionId] === "") && a.answer) {
+                    next[a.questionId] = a.answer;
+                  }
+                });
+                return next;
+              });
+            }
+          })
+          .catch(() => {});
+
+        // Calculate elapsed time from start if draft
+        if (attempt.startedAt) {
+          const elapsedSecs = Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000);
+          const totalSecs = (assessment.duration || 0) * 60;
+          const remaining = Math.max(0, totalSecs - elapsedSecs);
+          setSecondsLeft(remaining);
+        }
+      })
+      .catch(() => setStartStatus("error"));
+  };
   useEffect(() => {
     if (!assessment || !currentUser || initAttemptRef.current) return;
     initAttemptRef.current = true;
-    const attempt = startAssessment(assessment.id, currentUser.id);
-    setSubmission(attempt);
-
-    // Hydrate existing draft answers if present
-    const existingAnswers = {};
-    attempt.answers.forEach((ans) => {
-      existingAnswers[ans.questionId] = ans.answer;
-    });
-    setAnswers(existingAnswers);
-
-    // Calculate elapsed time from start if draft
-    if (attempt.startedAt) {
-      const elapsedSecs = Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000);
-      const totalSecs = (assessment.duration || 0) * 60;
-      const remaining = Math.max(0, totalSecs - elapsedSecs);
-      setSecondsLeft(remaining);
-    }
+    startAttempt();
   }, [assessment?.id, currentUser?.id]);
 
 
@@ -139,13 +167,25 @@ export const TakeQuiz = () => {
   }, []);
 
   const isSubmittedRef = useRef(false);
+  const autoSubmitTriedRef = useRef(false);
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const answersRef = useRef(answers);
 
   useEffect(() => {
     answersRef.current = answers;
   }, [answers]);
 
-  // Monitor unmount / browser close for auto-submit
+  // Build the submission payload from current answers
+  const buildAnswersPayload = (source) =>
+    assessment.questions.map((q) => ({
+      questionId: q.id,
+      answer: source[q.id] !== undefined ? source[q.id] : "",
+    }));
+
+  // Monitor unmount / browser close: warn, and persist answers as a server
+  // draft on teardown. (The old code force-submitted via an async fetch during
+  // page teardown — browsers cancel those requests, so it silently did
+  // nothing; a draft survives and is restored when the attempt resumes.)
   useEffect(() => {
     const handleBeforeUnload = (e) => {
       if (!isSubmittedRef.current) {
@@ -157,17 +197,14 @@ export const TakeQuiz = () => {
 
     return () => {
       window.removeEventListener("beforeunload", handleBeforeUnload);
-      // If component unmounts and we haven't submitted yet, force submit
-      if (!isSubmittedRef.current && submission) {
-        isSubmittedRef.current = true;
-        const answersPayload = assessment.questions.map((q) => ({
-          questionId: q.id,
-          answer: answersRef.current[q.id] !== undefined ? answersRef.current[q.id] : "",
-        }));
-        submitAssessment(submission.id, answersPayload);
+      if (!isSubmittedRef.current && submission && assessment) {
+        DraftService.saveDraft(currentUser.id, assessment.id, {
+          answers: buildAnswersPayload(answersRef.current),
+          savedAt: new Date().toISOString(),
+        }).catch(() => {});
       }
     };
-  }, [submission, assessment, submitAssessment]);
+  }, [submission, assessment]);
 
   // Set response selection
   const handleSelectAnswer = (qId, value) => {
@@ -242,49 +279,64 @@ export const TakeQuiz = () => {
     setShowConfirmModal(true);
   };
 
-  const executeFinalSubmission = () => {
+  const executeFinalSubmission = async () => {
     if (!submission) return;
 
     // Convert answers state to proper submission array structure
-    const answersPayload = assessment.questions.map((q) => {
-      return {
-        questionId: q.id,
-        answer: answers[q.id] !== undefined ? answers[q.id] : "",
-      };
-    });
+    const answersPayload = buildAnswersPayload(answers);
 
     isSubmittedRef.current = true;
-    const completed = submitAssessment(submission.id, answersPayload);
-    setShowConfirmModal(false);
+    setIsSubmitting(true);
+    try {
+      // Success is only claimed after the backend has persisted the answers.
+      const completed = await submitAssessment(submission.id, answersPayload);
+      // Clear the interim draft now that the real submission is persisted
+      DraftService.deleteDraft(currentUser.id, assessment.id).catch(() => {});
+      setShowConfirmModal(false);
 
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+
+      const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
+      toast.add(`Assessment submitted successfully!`, "success");
+      navigate({ to: `/student/results/${slug}/${completed.id}` });
+    } catch (err) {
+      isSubmittedRef.current = false;
+      toast.add(err?.message || "Submission failed — your answers are kept, please retry.", "error");
+    } finally {
+      setIsSubmitting(false);
     }
-
-    const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
-    toast.add(`Assessment submitted successfully!`, "success");
-    navigate({ to: `/student/results/${slug}/${completed.id}` });
   };
 
-  const handleAutoSubmit = () => {
-    if (!submission) return;
+  const handleAutoSubmit = async () => {
+    if (!submission || autoSubmitTriedRef.current) return;
+    autoSubmitTriedRef.current = true;
     toast.add(`System is submitting your answers.`, "warning", 6000);
 
-    const answersPayload = assessment.questions.map((q) => {
-      return {
-        questionId: q.id,
-        answer: answers[q.id] !== undefined ? answers[q.id] : "",
-      };
-    });
-
+    const answersPayload = buildAnswersPayload(answersRef.current);
     isSubmittedRef.current = true;
-    const completed = submitAssessment(submission.id, answersPayload);
-    if (document.fullscreenElement) {
-      document.exitFullscreen();
+    try {
+      const completed = await submitAssessment(submission.id, answersPayload);
+      DraftService.deleteDraft(currentUser.id, assessment.id).catch(() => {});
+      if (document.fullscreenElement) {
+        document.exitFullscreen();
+      }
+      const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
+      navigate({ to: `/student/results/${slug}/${completed.id}` });
+    } catch (err) {
+      isSubmittedRef.current = false;
+      autoSubmitTriedRef.current = false;
+      // Keep the work: persist as a draft so a manual Submit can recover it
+      DraftService.saveDraft(currentUser.id, assessment.id, {
+        answers: answersPayload,
+        savedAt: new Date().toISOString(),
+      }).catch(() => {});
+      toast.add(
+        "Auto-submit failed. Your answers are saved as a draft — press Submit to retry.",
+        "error",
+      );
     }
-
-    const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
-    navigate({ to: `/student/results/${slug}/${completed.id}` });
   };
 
   const currentQ = assessment.questions[currentQIndex];
@@ -298,6 +350,29 @@ export const TakeQuiz = () => {
     return (
       <div className="p-8 text-center bg-white rounded-2xl border">
         Assessment not found or you are not logged in.
+      </div>
+    );
+  }
+
+  // Starting the attempt requires a persisted in_progress record; offer an
+  // explicit retry instead of letting the student answer into the void.
+  if (startStatus === "error") {
+    return (
+      <div className="min-h-screen flex items-center justify-center p-8">
+        <div className="max-w-md w-full text-center bg-white dark:bg-neutral-900 rounded-2xl border border-gray-200 dark:border-[#2e2e3e] p-8 shadow-sm space-y-4">
+          <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto" />
+          <h2 className="text-lg font-bold">Couldn't start the attempt</h2>
+          <p className="text-sm text-gray-500">
+            The server could not record this attempt, so submitting wouldn't
+            be possible yet. Check your connection and try again.
+          </p>
+          <button
+            onClick={startAttempt}
+            className="px-5 py-2.5 bg-[#6C1D5F] hover:bg-[#84117C] text-white text-sm font-bold rounded-xl transition-colors"
+          >
+            Retry
+          </button>
+        </div>
       </div>
     );
   }
@@ -726,9 +801,10 @@ export const TakeQuiz = () => {
                 </button>
                 <button
                   onClick={executeFinalSubmission}
-                  className="py-2.5 bg-[#01AC9F] hover:bg-[#01AC9F]/90 text-white font-bold rounded-2xl text-xs shadow-md shadow-[#01AC9F]/20 cursor-pointer"
+                  disabled={isSubmitting}
+                  className="py-2.5 bg-[#01AC9F] hover:bg-[#01AC9F]/90 disabled:opacity-60 disabled:cursor-wait text-white font-bold rounded-2xl text-xs shadow-md shadow-[#01AC9F]/20 cursor-pointer"
                 >
-                  Confirm and Hand In
+                  {isSubmitting ? "Submitting…" : "Confirm and Hand In"}
                 </button>
               </div>
             </motion.div>

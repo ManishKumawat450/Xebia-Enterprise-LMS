@@ -18,7 +18,7 @@ public class Submission {
     private String status; // in_progress, submitted
     private String startedAt;
     private String submittedAt;
-    private Integer score;
+    private Double score;
     private Integer percentage;
     private Integer timeTaken;
     private Boolean isEvaluated;

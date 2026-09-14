@@ -130,16 +130,22 @@ export const TakeCoding = () => {
   useEffect(() => {
     if (!assessment || !currentUser || initAttemptRef.current) return;
     initAttemptRef.current = true;
-    const attempt = startAssessment(assessment.id, currentUser.id);
-    setSubmission(attempt);
+    Promise.resolve(startAssessment(assessment.id, currentUser.id))
+      .then((attempt) => {
+        if (!attempt) return;
+        setSubmission(attempt);
 
-    // Calc remaining seconds left
-    if (attempt.startedAt) {
-      const elapsedSecs = Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000);
-      const totalSecs = (Number(assessment.duration) || 60) * 60;
-      const remaining = Math.max(0, totalSecs - elapsedSecs);
-      setSecondsLeft(remaining);
-    }
+        // Calc remaining seconds left
+        if (attempt.startedAt) {
+          const elapsedSecs = Math.floor((Date.now() - new Date(attempt.startedAt).getTime()) / 1000);
+          const totalSecs = (Number(assessment.duration) || 60) * 60;
+          const remaining = Math.max(0, totalSecs - elapsedSecs);
+          setSecondsLeft(remaining);
+        }
+      })
+      .catch(() => {
+        toast.add("Could not start the coding attempt — the server is unreachable. Refresh to retry.", "error");
+      });
   }, [assessment.id, currentUser.id, startAssessment, assessment.duration]);
 
   const isSubmittedRef = useRef(false);
@@ -184,7 +190,9 @@ export const TakeCoding = () => {
             },
           };
         });
-        submitAssessment(submission.id, formattedAnswers);
+        submitAssessment(submission.id, formattedAnswers).catch(() => {
+          console.error("Teardown submission could not be persisted.");
+        });
       }
     };
   }, [submission, assessment, problems, currentUser.id, submitAssessment]);
@@ -460,7 +468,7 @@ export const TakeCoding = () => {
   };
 
   // Submit complete Assessment (Final submission)
-  const handleFinalizeExam = () => {
+  const handleFinalizeExam = async () => {
     // Collect all sub-submissions for this assessment to calculate total standard submission
     const studentSubs = codingSubmissions.filter(
       (sub) => sub.assessmentId === assessment.id && sub.studentId === currentUser.id,
@@ -490,15 +498,20 @@ export const TakeCoding = () => {
       };
     });
 
-    // Save standard LMS submission
+    // Save standard LMS submission — only celebrate once the server has it
     isSubmittedRef.current = true;
-    const lmsSub = submitAssessment(submission.id, formattedAnswers);
-    toast.add("Exam finalized and successfully evaluated!", "success");
-    setShowConfirmModal(false);
+    try {
+      const lmsSub = await submitAssessment(submission.id, formattedAnswers);
+      toast.add("Exam finalized and successfully evaluated!", "success");
+      setShowConfirmModal(false);
 
-    // Redirect to results page
-    const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
-    navigate({ to: `/student/results/${slug}/${lmsSub.id || submission.id}` });
+      // Redirect to results page
+      const slug = assessment.title.toLowerCase().replace(/[^a-z0-9]+/g, "-") || "results";
+      navigate({ to: `/student/results/${slug}/${lmsSub.id || submission.id}` });
+    } catch (err) {
+      isSubmittedRef.current = false;
+      toast.add(err?.message || "Failed to finalize the exam — please retry.", "error");
+    }
   };
 
   // Get student's previous attempts for this problem

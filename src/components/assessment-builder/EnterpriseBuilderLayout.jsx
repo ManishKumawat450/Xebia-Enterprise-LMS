@@ -212,7 +212,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
               };
               try {
                 if (initialAssessment) {
-                  editAssessment(initialAssessment.id, draftAssessment);
+                  await editAssessment(initialAssessment.id, draftAssessment);
                 } else {
                   await createAssessment(draftAssessment);
                 }
@@ -398,7 +398,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                         newAssessment.averageScore = 0;
                       }
                       if (initialAssessment) {
-                        editAssessment(initialAssessment.id, newAssessment);
+                        await editAssessment(initialAssessment.id, newAssessment);
                       } else {
                         await createAssessment(newAssessment);
                       }

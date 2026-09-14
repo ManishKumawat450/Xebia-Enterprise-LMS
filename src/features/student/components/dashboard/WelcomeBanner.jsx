@@ -1,5 +1,4 @@
 import { Badge } from "@/components/ui/badge";
-import { AuthService } from "@/services/api";
 import { useQuery } from "@tanstack/react-query";
 import { useLMS } from "@/context/LMSContext";
 

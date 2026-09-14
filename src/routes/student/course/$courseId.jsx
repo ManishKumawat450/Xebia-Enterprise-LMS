@@ -1,7 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { commentsData, studentProfile } from "@/features/student/mocks/dummy-data";
 import { useQuery } from "@tanstack/react-query";
-import { CourseService, EnrollmentService, ProgressService, AuthService } from "@/services/api";
+import { CourseService, EnrollmentService, ProgressService } from "@/services/api";
 import {
   ArrowLeft,
   ArrowRight,

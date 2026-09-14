@@ -5,11 +5,24 @@ const API_BASE_URL = import.meta.env.VITE_API_BASE_URL || "http://localhost:8080
 /**
  * Standard fetch wrapper that automatically handles JSON and error states
  */
+function getActiveUserId() {
+  // The real logged-in user (session mirror maintained by LMSContext) takes
+  // precedence over the temporary constant, so per-user backend endpoints
+  // (enrollments, progress, ...) resolve the correct identity.
+  try {
+    const s = JSON.parse(localStorage.getItem("session") || "null");
+    if (s?.id) return s.id;
+  } catch {
+    /* ignore malformed session */
+  }
+  return TEMPORARY_STUDENT_ID;
+}
+
 async function fetchApi(endpoint, options = {}) {
   const headers = {
     "Content-Type": "application/json",
     "X-Tenant-Id": "123e4567-e89b-12d3-a456-426614174000",
-    "X-User-Id": TEMPORARY_STUDENT_ID,
+    "X-User-Id": getActiveUserId(),
     ...options.headers,
   };
 
@@ -167,6 +180,9 @@ export const BatchService = {
 
 export const AssessmentService = {
   getAssessments: () => fetchApi("/v1/assessments"),
+  // Student-safe view: the backend strips correctAnswer/explanation so the
+  // answer key never reaches the take-quiz screen.
+  getAssessmentsForStudents: () => fetchApi("/v1/assessments/student"),
   createAssessment: (data) =>
     fetchApi("/v1/assessments", { method: "POST", body: JSON.stringify(data) }),
   updateAssessment: (id, data) =>
@@ -227,6 +243,8 @@ export const DraftService = {
     }),
   getDraft: (studentId, assessmentId) =>
     fetchApi(`/v1/assessments/drafts/${studentId}/${assessmentId}`).catch(() => null),
+  deleteDraft: (studentId, assessmentId) =>
+    fetchApi(`/v1/assessments/drafts/${studentId}/${assessmentId}`, { method: "DELETE" }),
 };
 
 export const AIDescriptionService = {
@@ -235,12 +253,6 @@ export const AIDescriptionService = {
       method: "POST",
       body: JSON.stringify({ topic }),
     }),
-};
-
-export const AuthService = {
-  login: (credentials) =>
-    fetchApi("/iam/auth/login", { method: "POST", body: JSON.stringify(credentials) }),
-  getProfile: () => fetchApi("/iam/me"),
 };
 
 export const CategoryService = {
