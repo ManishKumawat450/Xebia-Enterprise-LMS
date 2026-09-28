@@ -66,6 +66,22 @@ public class AssessmentController {
                     qm.put("marks", q.getMarks());
                     qm.put("required", q.getRequired());
                     qm.put("options", q.getOptions());
+                    // Share only student-facing type settings. Coding expected outputs
+                    // for hidden test cases and any answer-key metadata stay server-side.
+                    if (q.getExtraFields() != null) {
+                        q.getExtraFields().forEach((key, value) -> {
+                            if (key.startsWith("coding") && !key.toLowerCase().contains("solution")) {
+                                if ("codingTestCases".equals(key) && value instanceof List<?> cases) {
+                                    qm.put(key, cases.stream().filter(c -> c instanceof java.util.Map<?, ?> cm
+                                            && "public".equalsIgnoreCase(String.valueOf(cm.get("visibility")))).toList());
+                                } else {
+                                    qm.put(key, value);
+                                }
+                            } else if (key.startsWith("fileUpload")) {
+                                qm.put(key, value);
+                            }
+                        });
+                    }
                     questions.add(qm);
                 }
             }

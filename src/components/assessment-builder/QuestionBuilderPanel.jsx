@@ -40,6 +40,9 @@ export const QuestionBuilderPanel = ({
 
   // Inline draft for new/editing question
   const [draftText, setDraftText] = useState("");
+  const [draftType, setDraftType] = useState("mcq");
+  const [draftCodingCases, setDraftCodingCases] = useState('[{"input":"","expected":"","weight":1,"visibility":"public"}]');
+  const [draftCodingLanguages, setDraftCodingLanguages] = useState("javascript, python");
   const [draftOptions, setDraftOptions] = useState(["", "", "", ""]);
   const [draftCorrectAnswer, setDraftCorrectAnswer] = useState("");
   const [draftMarks, setDraftMarks] = useState(1);
@@ -75,7 +78,10 @@ export const QuestionBuilderPanel = ({
   const startAddNew = () => {
     setEditingId(null);
     setDraftText("");
-    setDraftOptions(["", "", "", ""]);
+    setDraftType(config?.type === "mixed" || config?.type === "Mixed Types (All)" ? "mcq" : config?.type || "mcq");
+    setDraftCodingCases('[{"input":"","expected":"","weight":1,"visibility":"public"}]');
+    setDraftCodingLanguages("javascript, python");
+    setDraftOptions(config?.type === "true_false" ? ["True", "False"] : ["", "", "", ""]);
     setDraftCorrectAnswer("");
     setDraftMarks(1);
     setAddingManual(true);
@@ -87,7 +93,10 @@ export const QuestionBuilderPanel = ({
     while (opts.length < 4) opts.push("");
     setEditingId(q.id || `idx_${idx}`);
     setDraftText(text);
-    setDraftOptions(opts.slice(0, 8));
+    setDraftType(q.type || config?.type || "mcq");
+    setDraftCodingCases(JSON.stringify(q.codingTestCases || [{ input: "", expected: "", weight: 1, visibility: "public" }], null, 2));
+    setDraftCodingLanguages((q.codingLanguagesAllowed || ["javascript", "python"]).join(", "));
+    setDraftOptions(q.type === "true_false" ? ["True", "False"] : opts.slice(0, 8));
     setDraftCorrectAnswer(
       Array.isArray(q.correctAnswer) ? q.correctAnswer.join(", ") : (q.correctAnswer || "")
     );
@@ -99,6 +108,7 @@ export const QuestionBuilderPanel = ({
     setAddingManual(false);
     setEditingId(null);
     setDraftText("");
+    setDraftType(config?.type === "mixed" || config?.type === "Mixed Types (All)" ? "mcq" : config?.type || "mcq");
     setDraftOptions(["", "", "", ""]);
     setDraftCorrectAnswer("");
     setDraftMarks(1);
@@ -110,7 +120,16 @@ export const QuestionBuilderPanel = ({
       return;
     }
 
-    const trimmedOptions = draftOptions.filter((o) => o.trim() !== "");
+    const trimmedOptions = draftType === "true_false" ? ["True", "False"] : draftOptions.filter((o) => o.trim() !== "");
+    let codingCases = [];
+    if (draftType === "coding") {
+      try { codingCases = JSON.parse(draftCodingCases); } catch { toast.add("Coding test cases must be valid JSON", "error"); return; }
+      if (!Array.isArray(codingCases) || codingCases.length === 0 || codingCases.some((tc) => !tc || typeof tc !== "object" || tc.input == null || tc.expected == null)) { toast.add("Add at least one valid coding test case with input and expected output", "error"); return; }
+    }
+    if (["mcq", "multiple_select", "true_false"].includes(draftType)) {
+      if (trimmedOptions.length < 2) { toast.add("Add at least two options", "error"); return; }
+      if (!draftCorrectAnswer.trim()) { toast.add("Mark the correct answer", "error"); return; }
+    }
 
     if (editingId !== null) {
       // Update existing question in-place
@@ -119,11 +138,14 @@ export const QuestionBuilderPanel = ({
         const updated = [...questions];
         updated[idx] = {
           ...updated[idx],
+          type: draftType,
+          codingTestCases: draftType === "coding" ? codingCases : undefined,
+          codingLanguagesAllowed: draftType === "coding" ? draftCodingLanguages.split(",").map((v) => v.trim()).filter(Boolean) : undefined,
           text: draftText,
           question: draftText,
           questionText: draftText,
-          options: trimmedOptions.length > 0 ? trimmedOptions : updated[idx].options,
-          correctAnswer: draftCorrectAnswer.trim() || updated[idx].correctAnswer,
+          options: ["mcq", "multiple_select", "true_false"].includes(draftType) ? trimmedOptions : undefined,
+          correctAnswer: ["mcq", "multiple_select", "true_false"].includes(draftType) ? (draftCorrectAnswer.trim() || undefined) : undefined,
           marks: draftMarks || updated[idx].marks,
         };
         setQuestions(updated);
@@ -133,10 +155,12 @@ export const QuestionBuilderPanel = ({
       // Create new
       const newQuestion = {
         id: `q_${Date.now()}_${Math.random().toString(36).slice(2, 6)}`,
-        type: config?.type || "mcq",
+        type: draftType,
+        ...(draftType === "coding" ? { codingTestCases: codingCases, codingLanguagesAllowed: draftCodingLanguages.split(",").map((v) => v.trim()).filter(Boolean) } : {}),
         question: draftText,
+        text: draftText,
         marks: draftMarks || 1,
-        options: trimmedOptions.length > 0 ? trimmedOptions : undefined,
+        options: ["mcq", "multiple_select", "true_false"].includes(draftType) ? trimmedOptions : undefined,
         correctAnswer: draftCorrectAnswer.trim() || undefined,
       };
       setQuestions([newQuestion, ...questions]);
@@ -268,7 +292,7 @@ export const QuestionBuilderPanel = ({
   // ── Render Inline Form ───────────────────────────────────
 
   const renderInlineForm = (isEdit) => {
-    const qType = isEdit ? (questions.find((q) => q.id === editingId)?.type || config?.type) : config?.type;
+    const qType = isEdit ? (questions.find((q) => q.id === editingId)?.type || config?.type) : draftType;
     const showOptions = ["mcq", "multiple_select", "true_false"].includes(qType);
 
     return (
@@ -290,6 +314,14 @@ export const QuestionBuilderPanel = ({
             </button>
           </div>
 
+          {(config?.type === "mixed" || config?.type === "Mixed Types (All)") && (
+            <label className="block text-[10px] font-bold text-neutral-500 uppercase tracking-wider">Question type
+              <select value={draftType} onChange={(e) => { setDraftType(e.target.value); setDraftCorrectAnswer(""); setDraftOptions(e.target.value === "true_false" ? ["True", "False"] : ["", "", "", ""]); }} className="block w-full mt-1 px-3 py-2 rounded-lg border bg-white dark:bg-neutral-950 dark:text-white">
+                {questionTypes.filter((type) => type.id !== "coding").map((type) => <option key={type.id} value={type.id}>{type.label}</option>)}
+              </select>
+            </label>
+          )}
+
           {/* Question Text */}
           <textarea
             value={draftText}
@@ -298,6 +330,13 @@ export const QuestionBuilderPanel = ({
             placeholder="Type your question here..."
             className="w-full px-3 py-2 bg-neutral-50 dark:bg-neutral-950 border border-neutral-200 dark:border-neutral-800 rounded-xl text-sm focus:outline-none focus:ring-2 focus:ring-[#6C1D5F]/30 dark:text-white resize-none"
           />
+
+          {qType === "coding" && <div className="space-y-2">
+            <label className="block text-[10px] font-bold text-neutral-500 uppercase">Coding test cases (JSON: input, expected, weight, visibility)</label>
+            <textarea value={draftCodingCases} onChange={(e) => setDraftCodingCases(e.target.value)} rows={5} className="w-full rounded-lg border bg-neutral-50 dark:bg-neutral-950 dark:text-white p-2 font-mono text-xs" />
+            <label className="block text-[10px] font-bold text-neutral-500 uppercase">Allowed languages (comma separated)</label>
+            <input value={draftCodingLanguages} onChange={(e) => setDraftCodingLanguages(e.target.value)} className="w-full rounded-lg border bg-neutral-50 dark:bg-neutral-950 dark:text-white p-2 text-xs" />
+          </div>}
 
           {/* Options (with reorder + correct answer) */}
           {showOptions && (
@@ -336,6 +375,7 @@ export const QuestionBuilderPanel = ({
                     <input
                       type="text"
                       value={opt}
+                      disabled={qType === "true_false"}
                       onChange={(e) => {
                         const newOpts = [...draftOptions];
                         newOpts[i] = e.target.value;
@@ -346,17 +386,17 @@ export const QuestionBuilderPanel = ({
                     />
 
                     {/* Reorder */}
-                    <div className="flex flex-col -space-y-0.5 shrink-0">
+                    {qType !== "true_false" && <div className="flex flex-col -space-y-0.5 shrink-0">
                       <button onClick={() => moveOption(i, i - 1)} disabled={i === 0} className="p-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 disabled:opacity-20">
                         <ChevronUp className="w-3 h-3" />
                       </button>
                       <button onClick={() => moveOption(i, i + 1)} disabled={i === draftOptions.length - 1 || (i >= draftOptions.findIndex((o) => o.trim() === "") && draftOptions[i + 1]?.trim() === "")} className="p-0.5 text-neutral-400 hover:text-neutral-700 dark:hover:text-neutral-300 disabled:opacity-20">
                         <ChevronDown className="w-3 h-3" />
                       </button>
-                    </div>
+                    </div>}
 
                     {/* Remove option */}
-                    <button
+                    {qType !== "true_false" && <button
                       onClick={() => {
                         const newOpts = [...draftOptions];
                         newOpts.splice(i, 1);
@@ -366,11 +406,11 @@ export const QuestionBuilderPanel = ({
                       className="p-0.5 text-neutral-400 hover:text-red-500 shrink-0"
                     >
                       <X className="w-3 h-3" />
-                    </button>
+                    </button>}
                   </div>
                 );
               })}
-              {draftOptions.filter((o) => o.trim() !== "").length < draftOptions.length && (
+              {qType !== "true_false" && draftOptions.filter((o) => o.trim() !== "").length < draftOptions.length && (
                 <button
                   onClick={() => {
                     const firstEmpty = draftOptions.findIndex((o) => o.trim() === "");

@@ -699,9 +699,16 @@ export const LMSProvider = ({ children }) => {
             ansObj.marksAwarded = -penalty;
             score -= penalty;
           }
-        } else if (q.type === "multi_select") {
+        } else if (q.type === "multi_select" || q.type === "multiple_select") {
+          const rawCorrect = Array.isArray(q.correctAnswer)
+            ? q.correctAnswer
+            : String(q.correctAnswer || "").split(",").map((s) => s.trim()).filter(Boolean);
           const correctSet = new Set(
-            (q.correctAnswer || []).map((s) => String(s).trim().toLowerCase()),
+            rawCorrect.map((s) => {
+              const value = String(s).trim();
+              const resolved = q.options && /^\d+$/.test(value) ? q.options[Number(value)] : value;
+              return String(resolved ?? "").trim().toLowerCase();
+            }),
           );
           const providedSet = new Set(
             (ansObj.answer || []).map((s) => {

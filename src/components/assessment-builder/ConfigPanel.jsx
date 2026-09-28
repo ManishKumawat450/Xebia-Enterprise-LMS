@@ -260,6 +260,7 @@ export const ConfigPanel = ({ config, setConfig }) => {
                 Select Type...
               </option>
               <option value="mcq">Single Choice (MCQ)</option>
+              <option value="mixed">Mixed question types</option>
               <option value="true_false">True / False</option>
               <option value="multiple_select">Multiple Choice (Multiple Select)</option>
               <option value="short_answer">Short Answer / Plain text</option>

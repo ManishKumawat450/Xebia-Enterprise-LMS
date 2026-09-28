@@ -240,25 +240,42 @@ export const TakeQuiz = () => {
     const file = event.target.files?.[0];
     if (!file) return;
 
-    simulateFileUpload(qId, file.name, file.size);
+    simulateFileUpload(qId, file);
   };
 
-  const simulateFileUpload = (qId, name, sizeBytes) => {
+  const simulateFileUpload = (qId, file) => {
+    const maxBytes = 15 * 1024 * 1024;
+    if (file.size > maxBytes) {
+      toast.add("File exceeds the 15 MB limit", "error");
+      return;
+    }
     setUploadingFiles((prev) => ({ ...prev, [qId]: true }));
-
-    // Simulate uploading delay
-    setTimeout(() => {
-      const sizeMB = (sizeBytes / (1024 * 1024)).toFixed(1) + " MB";
-      const filePayload = {
-        name,
-        size: sizeMB,
+    const reader = new FileReader();
+    reader.onload = () => {
+      const payload = {
+        name: file.name,
+        size: `${(file.size / (1024 * 1024)).toFixed(1)} MB`,
+        mimeType: file.type || "application/octet-stream",
         uploadedAt: new Date().toISOString(),
+        dataUrl: reader.result,
       };
-
-      handleSelectAnswer(qId, filePayload);
+      handleSelectAnswer(qId, JSON.stringify(payload));
       setUploadingFiles((prev) => ({ ...prev, [qId]: false }));
-      toast.add(`File "${name}" uploaded and buffered.`, "success");
-    }, 1500);
+      toast.add(`File "${file.name}" attached to your submission.`, "success");
+    };
+    reader.onerror = () => {
+      setUploadingFiles((prev) => ({ ...prev, [qId]: false }));
+      toast.add("Could not read this file. Please try again.", "error");
+    };
+    reader.readAsDataURL(file);
+  };
+
+  const getUploadedFile = (answer) => {
+    if (answer && typeof answer === "object") return answer;
+    if (typeof answer === "string" && answer.startsWith("{\"name\":")) {
+      try { return JSON.parse(answer); } catch { return null; }
+    }
+    return null;
   };
 
   // Submission compilation
@@ -513,7 +530,7 @@ export const TakeQuiz = () => {
                     );
                   })}
                 </div>
-              ) : currentQ.type === "multi_select" ? (
+              ) : currentQ.type === "multi_select" || currentQ.type === "multiple_select" ? (
                 <div className="space-y-3">
                   {currentQ.options?.map((opt, oIdx) => {
                     const activeSet = Array.isArray(answers[currentQ.id])
@@ -573,7 +590,7 @@ export const TakeQuiz = () => {
                       e.preventDefault();
                       setIsDragOver(false);
                       const file = e.dataTransfer.files?.[0];
-                      if (file) simulateFileUpload(currentQ.id, file.name, file.size);
+                      if (file) simulateFileUpload(currentQ.id, file);
                     }}
                     className={`border-2 border-dashed rounded-2xl p-8 text-center transition-all flex flex-col items-center justify-center ${isDragOver ? "border-[#01AC9F] bg-[#01AC9F]/5" : "border-gray-200 dark:border-[#2e2e3e]/80 dark:border-neutral-800 hover:border-brand-velvet"}`}
                   >
@@ -603,16 +620,16 @@ export const TakeQuiz = () => {
                   )}
 
                   {/* Uploaded File Detail Preview */}
-                  {answers[currentQ.id] && typeof answers[currentQ.id] === "object" && (
+                  {getUploadedFile(answers[currentQ.id]) && (
                     <div className="flex items-center justify-between p-3.5 bg-emerald-50 dark:bg-emerald-950/20 rounded-2xl border border-emerald-200/40">
                       <div className="flex items-center gap-2 text-xs truncate">
                         <FileText className="w-5 h-5 text-emerald-500 shrink-0" />
                         <div className="truncate">
                           <p className="font-semibold text-neutral-800 dark:text-neutral-200 truncate">
-                            {answers[currentQ.id].name}
+                            {getUploadedFile(answers[currentQ.id]).name}
                           </p>
                           <p className="text-[10px] text-neutral-500 dark:text-neutral-400">
-                            {answers[currentQ.id].size}
+                            {getUploadedFile(answers[currentQ.id]).size}
                           </p>
                         </div>
                       </div>
