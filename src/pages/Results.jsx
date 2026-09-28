@@ -130,6 +130,21 @@ export const Results = () => {
           {assessment.questions.map((q, idx) => {
             const ansObj = submission.answers?.find((sa) => sa.questionId === q.id);
             const studentAns = ansObj?.answer;
+            const parseSelections = (value) => {
+              if (Array.isArray(value)) return value;
+              if (typeof value !== "string") return [];
+              try {
+                const parsed = JSON.parse(value);
+                if (Array.isArray(parsed)) return parsed;
+              } catch { /* legacy comma-separated answer */ }
+              return value.split(",").map((part) => part.trim()).filter(Boolean);
+            };
+            const selectedOptions = parseSelections(studentAns);
+            const correctOptions = parseSelections(q.correctAnswer);
+            let uploadedFile = studentAns;
+            if (typeof studentAns === "string" && studentAns.startsWith("{\"name\":")) {
+              try { uploadedFile = JSON.parse(studentAns); } catch { uploadedFile = null; }
+            }
             const marksAwarded = ansObj?.marksAwarded !== undefined ? ansObj.marksAwarded : 0;
             const isCorrect = marksAwarded > 0 || ansObj?.isCorrect;
             const isEvaluated = submission.isEvaluated;
@@ -166,8 +181,10 @@ export const Results = () => {
                     <div className="text-xs font-semibold text-gray-700 dark:text-gray-300">
                       {q.type === "mcq" || q.type === "true_false" ? (
                         <span>{q.options?.[Number(studentAns)] || studentAns}</span>
-                      ) : q.type === "multiple_select" && Array.isArray(studentAns) ? (
-                        <ul className="list-disc pl-4 space-y-0.5">{studentAns.map((s, i) => <li key={i}>{q.options?.[Number(s)] || s}</li>)}</ul>
+                      ) : (q.type === "multiple_select" || q.type === "multi_select") && selectedOptions.length > 0 ? (
+                        <ul className="list-disc pl-4 space-y-0.5">{selectedOptions.map((s, i) => <li key={i}>{q.options?.[Number(s)] || s}</li>)}</ul>
+                      ) : q.type === "file_upload" ? (
+                        <span>{uploadedFile?.name || (studentAns ? "File attached" : "No file submitted")}</span>
                       ) : (
                         <p className="whitespace-pre-wrap italic">"{studentAns || 'No response.'}"</p>
                       )}
@@ -180,8 +197,8 @@ export const Results = () => {
                       <div className="text-xs font-bold text-gray-700 dark:text-gray-300">
                         {q.type === "mcq" || q.type === "true_false" ? (
                           <span className="text-[#01AC9F]">{q.options?.[Number(q.correctAnswer)] || q.correctAnswer}</span>
-                        ) : q.type === "multiple_select" && Array.isArray(q.correctAnswer) ? (
-                          <ul className="list-disc pl-4 space-y-0.5 text-[#01AC9F]">{q.correctAnswer.map((s, i) => <li key={i}>{q.options?.[Number(s)] || s}</li>)}</ul>
+                        ) : (q.type === "multiple_select" || q.type === "multi_select") && correctOptions.length > 0 ? (
+                          <ul className="list-disc pl-4 space-y-0.5 text-[#01AC9F]">{correctOptions.map((s, i) => <li key={i}>{q.options?.[Number(s)] || s}</li>)}</ul>
                         ) : (
                           <span className="text-gray-400 font-medium">Manual review required</span>
                         )}
