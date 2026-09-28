@@ -50,6 +50,10 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
     endDate: initialAssessment?.endDate || "",
     endTime: initialAssessment?.endTime || "",
     description: initialAssessment?.description || "",
+    // These two were never hydrated from the saved assessment, so editing a
+    // draft silently reset attempts to 1 and passing to 75.
+    maxAttempts: initialAssessment?.attemptsAllowed || 1,
+    passingMarks: initialAssessment?.passingMarks ?? "",
     aiCount: 5,
     aiTaxonomy: "Understanding",
     quickSettings: {
@@ -60,14 +64,17 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
     },
   });
 
-  // Dummy auto-save simulator
+  // Honest save indicator: previously a fake simulator flipped to "saved"
+  // every 15s without persisting anything. Now it reflects real state —
+  // "unsaved" whenever config/questions change, cleared by draft/publish.
+  const firstSaveRender = React.useRef(true);
   useEffect(() => {
-    const interval = setInterval(() => {
-      setSaveState("saving");
-      setTimeout(() => setSaveState("saved"), 1000);
-    }, 15000);
-    return () => clearInterval(interval);
-  }, []);
+    if (firstSaveRender.current) {
+      firstSaveRender.current = false;
+      return;
+    }
+    setSaveState("unsaved");
+  }, [config, questions]);
 
   const isConfigComplete =
     config.title && config.topic && config.course && config.difficulty && config.duration && config.marks;
@@ -77,6 +84,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
       {/* Tab Header */}
       <div className="bg-white dark:bg-neutral-900 border-b border-neutral-200 dark:border-neutral-800 shrink-0">
         <div className="flex items-center justify-between px-6 py-3">
+          <div className="flex items-center gap-4">
           {/* Back Button */}
           <button
             onClick={onBack}
@@ -84,6 +92,19 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
           >
             <ArrowLeft className="w-4 h-4" /> Back to Assessments
           </button>
+
+          {/* Honest save state (driven by real edits, not a simulator) */}
+          <div className="flex items-center gap-1.5 text-[11px] font-bold">
+            <span
+              className={`w-2 h-2 rounded-full ${
+                saveState === "saved" ? "bg-[#01AC9F]" : "bg-amber-500 animate-pulse"
+              }`}
+            />
+            <span className={saveState === "saved" ? "text-[#01AC9F]" : "text-amber-600"}>
+              {saveState === "saved" ? "Saved" : "Unsaved changes"}
+            </span>
+          </div>
+          </div>
 
           {/* Tabs */}
           <div className="flex items-center gap-1 bg-neutral-100 dark:bg-neutral-800 rounded-xl p-1">
@@ -190,9 +211,9 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                 description: config.description || "",
                 type: config.type === "Mixed Types (All)" ? "mixed" : config.type || "mcq",
                 status: "draft",
-                questions: questions.map(({ id, ...q }) => {
-                  return { id: id || `q_${Date.now()}_${Math.random()}`, ...q };
-                }),
+                // Keep server-assigned question ids untouched: regenerating them
+                // on every save broke submission auto-grading matching.
+                questions,
                 duration: parseInt(config.duration) || 0,
                 marks:
                   parseInt(config.marks) || questions.reduce((sum, q) => sum + (q.marks || 1), 0),
@@ -203,6 +224,9 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                 endTime: config.endTime || "",
                 dueDate: config.endDate || "2099-12-31",
                 batches: config.batches || [],
+                // Backend entity field is attemptsAllowed; maxAttempts alone was
+                // silently dropped by Jackson, so the setting never persisted.
+                attemptsAllowed: parseInt(config.maxAttempts) || 1,
                 maxAttempts: parseInt(config.maxAttempts) || 1,
                 negativeMarking: config.quickSettings?.negativeMarking || false,
                 negativeMarksValue: config.quickSettings?.negativeMarksValue || 25,
@@ -217,9 +241,10 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                   await createAssessment(draftAssessment);
                 }
                 toast.add("Draft saved successfully!", "success");
+                setSaveState("saved");
                 onBack();
               } catch (err) {
-                toast.add("Failed to save draft", "error");
+                toast.add(err?.message || "Failed to save draft", "error");
               }
             }}
             className="px-5 py-2 text-sm font-bold text-white bg-[#6C1D5F] hover:bg-[#84117C] rounded-xl flex items-center gap-2 shadow-sm transition-colors"
@@ -245,6 +270,13 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
               }
               if (questions.length === 0) {
                 toast.add("Please add at least one question before publishing.", "error");
+                return;
+              }
+              if (!config.batches || config.batches.length === 0) {
+                toast.add(
+                  "Select at least one batch before publishing — students won't see it otherwise.",
+                  "error",
+                );
                 return;
               }
               setShowPublishModal(true);
@@ -370,9 +402,8 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                       description: config.description || "",
                       type: config.type === "Mixed Types (All)" ? "mixed" : config.type,
                       status: "published",
-                      questions: questions.map(({ id, ...q }) => {
-                        return { id: id || `q_${Date.now()}_${Math.random()}`, ...q };
-                      }),
+                      // Keep server-assigned question ids (see draft-save note).
+                      questions,
                       duration: parseInt(config.duration) || 0,
                       marks:
                         parseInt(config.marks) ||
@@ -384,6 +415,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                       endTime: config.endTime || "",
                       dueDate: config.endDate || "2099-12-31",
                       batches: config.batches || [],
+                      attemptsAllowed: parseInt(config.maxAttempts) || 1,
                       maxAttempts: parseInt(config.maxAttempts) || 1,
                       negativeMarking: config.quickSettings?.negativeMarking || false,
                       negativeMarksValue: config.quickSettings?.negativeMarksValue || 25,
@@ -409,10 +441,12 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                           : "Assessment published successfully!",
                         "success",
                       );
+                      setSaveState("saved");
                       setShowPublishModal(false);
                       onBack();
                     } catch (err) {
-                      toast.add("Failed to publish assessment", "error");
+                      // Surface the backend's validation message (400) verbatim
+                      toast.add(err?.message || "Failed to publish assessment", "error");
                     }
                   }}
                   className="px-6 py-2 text-sm font-bold text-white bg-[#6C1D5F] hover:bg-[#84117C] rounded-xl flex items-center gap-2 shadow-md hover:-translate-y-0.5 transition-all"

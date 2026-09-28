@@ -515,7 +515,8 @@ export const LMSProvider = ({ children }) => {
       return savedAssessment;
     } catch (err) {
       console.error(err);
-      throw err;
+      // Preserve the backend's validation message (400 body) for the builder UI
+      throw new Error(err?.message || "Failed to save assessment");
     }
   };
 
@@ -558,7 +559,7 @@ export const LMSProvider = ({ children }) => {
       return res;
     } catch (err) {
       console.error(err);
-      throw err;
+      throw new Error(err?.message || "Failed to update assessment");
     }
   };
 
@@ -573,18 +574,32 @@ export const LMSProvider = ({ children }) => {
     }
   };
 
-  const duplicateAssessment = (id) => {
+  const duplicateAssessment = async (id) => {
     const original = assessments.find((a) => a.id === id);
     if (!original) return;
 
+    // Questions MUST have their ids stripped: they are @OneToMany rows keyed by
+    // assessment_id, so saving a copy that reuses the original's question ids
+    // would re-parent (steal) the original's questions into the duplicate.
     const duplicated = {
       ...original,
-      id: `A-${Date.now()}`,
+      id: undefined,
       title: `${original.title} (Copy)`,
       status: "draft", // defaults to draft
       createdAt: new Date().toISOString().split("T")[0],
+      questions: (original.questions || []).map(({ id: _qid, ...q }) => q),
     };
-    setAssessments((prev) => [duplicated, ...prev]);
+
+    // Persist the copy as a real draft (previously local-state only: it
+    // vanished on refresh). Server response gives canonical ids.
+    try {
+      const saved = await AssessmentService.createAssessment(duplicated);
+      setAssessments((prev) => [saved, ...prev]);
+      return saved;
+    } catch (err) {
+      console.error(err);
+      throw new Error(err?.message || "Failed to duplicate assessment");
+    }
   };
 
   const archiveAssessment = (id) => {

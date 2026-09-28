@@ -34,8 +34,46 @@ public class AssessmentService {
     }
 
     public Assessment createAssessment(Assessment assessment) {
+        validate(assessment, true);
         sanitizeQuestionIds(assessment);
         return assessmentRepository.save(assessment);
+    }
+
+    /**
+     * Creation/edit-time rules that used to be silently accepted: missing
+     * title, zero duration/marks, out-of-range passing marks, publishing with
+     * no questions or no batch, and duplicate titles on create.
+     * IllegalArgumentException is mapped to HTTP 400 by GlobalExceptionHandler.
+     */
+    private void validate(Assessment a, boolean isCreate) {
+        if (a.getTitle() == null || a.getTitle().isBlank()) {
+            throw new IllegalArgumentException("Validation: title is required");
+        }
+        if (a.getDuration() != null && a.getDuration() <= 0) {
+            throw new IllegalArgumentException("Validation: duration must be greater than 0 minutes");
+        }
+        if (a.getMarks() != null && a.getMarks() <= 0) {
+            throw new IllegalArgumentException("Validation: total marks must be greater than 0");
+        }
+        if (a.getPassingMarks() != null && (a.getPassingMarks() < 0 || a.getPassingMarks() > 100)) {
+            throw new IllegalArgumentException("Validation: passing marks must be between 0 and 100 (it is a percentage)");
+        }
+        if ("published".equalsIgnoreCase(a.getStatus())) {
+            if (a.getQuestions() == null || a.getQuestions().isEmpty()) {
+                throw new IllegalArgumentException("Validation: a published assessment needs at least one question");
+            }
+            if (a.getBatches() == null || a.getBatches().isEmpty()) {
+                throw new IllegalArgumentException("Validation: assign at least one batch before publishing");
+            }
+        }
+        if (isCreate) {
+            String title = a.getTitle().trim();
+            boolean dup = assessmentRepository.findAll().stream()
+                    .anyMatch(x -> x.getTitle() != null && x.getTitle().trim().equalsIgnoreCase(title));
+            if (dup) {
+                throw new IllegalArgumentException("Validation: an assessment with the title \"" + title + "\" already exists");
+            }
+        }
     }
 
     public Assessment updateAssessment(String id, Assessment updated) {
@@ -80,9 +118,11 @@ public class AssessmentService {
                     existing.setQuestions(updated.getQuestions());
                 }
             }
+            validate(existing, false);
             sanitizeQuestionIds(existing);
             return assessmentRepository.save(existing);
         }
+        validate(updated, false);
         sanitizeQuestionIds(updated);
         return assessmentRepository.save(updated);
     }

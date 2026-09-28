@@ -399,10 +399,15 @@ export const AssessmentBuilder = () => {
   };
 
   // Duplicate assessment action
-  const handleDuplicate = (e, id, label) => {
+  const handleDuplicate = async (e, id, label) => {
     e.stopPropagation();
-    duplicateAssessment(id);
-    toast.add(`Duplicated "${label}". Copy is set to Draft.`, "success");
+    toast.add(`Duplicating "${label}"...`, "info");
+    try {
+      await duplicateAssessment(id);
+      toast.add(`Duplicated "${label}" successfully! Copy is set to Draft.`, "success");
+    } catch (err) {
+      toast.add(err?.message || `Failed to duplicate "${label}"`, "error");
+    }
   };
 
   // Delete assessment
