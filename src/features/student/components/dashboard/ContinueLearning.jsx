@@ -1,5 +1,5 @@
 import { Link } from "@tanstack/react-router";
-import { Clock, PlayCircle } from "lucide-react";
+import { BookOpen, Clock, PlayCircle } from "lucide-react";
 import {
   Card,
   CardContent,
@@ -16,7 +16,7 @@ import { Progress } from "@/components/ui/progress";
  * @param {{ courses: Array }} props
  */
 export function ContinueLearning({ courses }) {
-  const inProgress = courses.filter((c) => c.progress > 0 && c.progress < 100);
+  const inProgress = courses.filter((c) => Number(c.progress) >= 0 && Number(c.progress) < 100);
 
   return (
     <div>
@@ -35,11 +35,17 @@ export function ContinueLearning({ courses }) {
           >
             {/* Thumbnail */}
             <div className="h-32 w-full overflow-hidden">
-              <img
-                src={course.image}
-                alt={course.title}
-                className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
-              />
+              {course.image ? (
+                <img
+                  src={course.image}
+                  alt={course.title}
+                  className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
+                />
+              ) : (
+                <div className="w-full h-full flex items-center justify-center bg-primary/10 text-primary">
+                  <BookOpen className="w-10 h-10" aria-hidden="true" />
+                </div>
+              )}
             </div>
 
             <CardHeader className="p-4 pb-2">

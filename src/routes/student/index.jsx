@@ -1,5 +1,7 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
 import { useMemo } from "react";
+import { useQuery } from "@tanstack/react-query";
+import { EnrollmentService, ProgressService } from "@/services/api";
 import { useLMS } from "@/context/LMSContext";
 import { BookOpen, Calendar, Award, Bell, Play, FileText, BarChart3, Star } from "lucide-react";
 import { clsx } from "clsx";
@@ -14,6 +16,47 @@ export const Route = createFileRoute("/student/")({ component: DashboardHome });
 
 function DashboardHome() {
   const { currentUser, submissions, assessments, batches, notifications } = useLMS();
+  const { data: enrolledCourses = [] } = useQuery({
+    queryKey: ["student-enrolled-courses"],
+    queryFn: EnrollmentService.getMyCourses,
+  });
+  const enrolledCourseIds = enrolledCourses.map((course) => course.id).filter(Boolean);
+  const enrolledCourseIdsKey = enrolledCourseIds.join(",");
+  const { data: progressByCourse = {} } = useQuery({
+    queryKey: ["student-dashboard-course-progress", enrolledCourseIdsKey],
+    queryFn: async () => {
+      const entries = await Promise.all(
+        enrolledCourseIds.map(async (courseId) => {
+          try {
+            return [String(courseId), await ProgressService.getCourseProgress(courseId)];
+          } catch {
+            return [String(courseId), null];
+          }
+        }),
+      );
+      return Object.fromEntries(entries);
+    },
+    enabled: enrolledCourseIds.length > 0,
+  });
+
+  const continueLearningCourses = enrolledCourses.map((course) => {
+    const progress = progressByCourse[String(course.id)];
+    const duration = [
+      course.durationHours ? `${course.durationHours}h` : "",
+      course.durationMinutes ? `${course.durationMinutes}m` : "",
+    ].filter(Boolean).join(" ");
+
+    return {
+      ...course,
+      title: course.title || course.name || "Untitled course",
+      progress: progress?.progressPercentage ?? course.progress ?? 0,
+      image: course.image || course.thumbnailImageUrl || course.thumbnail || course.icon || "",
+      duration: duration || course.duration || "Self paced",
+      lastWatched: progress?.lastAccessedSubmoduleId
+        ? `${progress.completedLessons || 0} lessons completed`
+        : "Start your first lesson",
+    };
+  });
 
   const unreadNotifications = notifications.filter((n) => !n.isRead && !n.read).length;
 
@@ -133,7 +176,7 @@ function DashboardHome() {
       </div>
 
       {/* Continue Learning */}
-      {enrolledBatches.length > 0 && <ContinueLearning courses={enrolledBatches.map((b) => ({ id: b.id, title: b.name, progress: 0 }))} />}
+      {continueLearningCourses.length > 0 && <ContinueLearning courses={continueLearningCourses} />}
     </div>
   );
 }

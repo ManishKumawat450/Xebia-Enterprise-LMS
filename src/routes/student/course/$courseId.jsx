@@ -1,5 +1,5 @@
 import { createFileRoute, Link } from "@tanstack/react-router";
-import { commentsData, studentProfile } from "@/features/student/mocks/dummy-data";
+import DOMPurify from "isomorphic-dompurify";
 import { useQuery } from "@tanstack/react-query";
 import { CourseService, EnrollmentService, ProgressService } from "@/services/api";
 import {
@@ -30,6 +30,12 @@ import { getCloudinaryDocumentPreviewUrl, normalizeCloudinaryDocumentUrl } from 
 export const Route = createFileRoute("/student/course/$courseId")({
   component: CourseViewer,
 });
+
+const SAFE_CONTENT_TAGS = [
+  "a", "b", "blockquote", "br", "code", "div", "em", "h1", "h2", "h3", "h4",
+  "hr", "i", "img", "li", "ol", "p", "pre", "span", "strong", "u", "ul",
+];
+const SAFE_CONTENT_ATTRIBUTES = ["alt", "class", "href", "src", "title"];
 
 function ContentRenderer({ block }) {
   const type = block.type || "NOTE";
@@ -78,6 +84,11 @@ function ContentRenderer({ block }) {
   } else {
     dataToRender = parsedData.text || parsedData.title || block.title || block.contentData || "";
   }
+
+  const safeHtml = DOMPurify.sanitize(String(dataToRender || ""), {
+    ALLOWED_TAGS: SAFE_CONTENT_TAGS,
+    ALLOWED_ATTR: SAFE_CONTENT_ATTRIBUTES,
+  });
 
   switch (uiType) {
     case "Video":
@@ -203,7 +214,7 @@ function ContentRenderer({ block }) {
     case "Callout":
       return (
         <div className="p-6 rounded-xl bg-[#01AC9F]/10 dark:bg-[#01AC9F]/20 border border-[#01AC9F]/20 text-[#01AC9F] shadow-sm">
-          <div dangerouslySetInnerHTML={{ __html: dataToRender }} className="font-medium" />
+          <div dangerouslySetInnerHTML={{ __html: safeHtml }} className="font-medium" />
         </div>
       );
     case "Table":
@@ -257,7 +268,7 @@ function ContentRenderer({ block }) {
     default:
       return (
         <div className="prose prose-slate dark:prose-invert max-w-none prose-headings:font-extrabold prose-p:text-[#5A5A5A] dark:prose-p:text-[#DADCEA] prose-a:text-[#6C1D5F] dark:prose-a:text-[#84117C] whitespace-pre-wrap">
-          <div dangerouslySetInnerHTML={{ __html: dataToRender }} />
+          <div dangerouslySetInnerHTML={{ __html: safeHtml }} />
         </div>
       );
   }
