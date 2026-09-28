@@ -54,7 +54,7 @@ const CustomTooltip = ({ active, payload, label }) => {
 };
 
 export const Reports = () => {
-  const { students, batches, assessments, submissions } = useLMS();
+  const { currentUser, students, batches, assessments, submissions } = useLMS();
   const [selectedBatchId, setSelectedBatchId] = useState("all");
   const [studentSearch, setStudentSearch] = useState("");
   const [loading, setLoading] = useState(true);
@@ -64,74 +64,102 @@ export const Reports = () => {
     return () => clearTimeout(timer);
   }, []);
 
-  // ── Computed Metrics (all from real data, zero hardcoded fallbacks) ──
-
-  const evaluatedSubs = useMemo(
-    () => submissions.filter((s) => s.status === "submitted" && s.isEvaluated),
-    [submissions]
+  // Keep trainer reporting restricted to batches they own or are assigned to.
+  const trainerBatches = useMemo(() => {
+    const trainerId = currentUser?.id;
+    if (!trainerId) return [];
+    return batches.filter((batch) => batch.createdBy === trainerId || batch.trainerId === trainerId);
+  }, [batches, currentUser?.id]);
+  const reportBatches = useMemo(
+    () => selectedBatchId === "all" ? trainerBatches : trainerBatches.filter((batch) => batch.id === selectedBatchId),
+    [trainerBatches, selectedBatchId],
+  );
+  const reportBatchIds = useMemo(() => new Set(reportBatches.map((batch) => batch.id)), [reportBatches]);
+  const reportStudents = useMemo(
+    () => students.filter((student) => (student.batches || []).some((batchId) => reportBatchIds.has(batchId))),
+    [students, reportBatchIds],
+  );
+  const reportStudentIds = useMemo(() => new Set(reportStudents.map((student) => student.id)), [reportStudents]);
+  const reportAssessments = useMemo(
+    () => assessments.filter((assessment) =>
+      (assessment.batches || []).some((batchId) => reportBatchIds.has(batchId)) ||
+      (selectedBatchId === "all" && currentUser?.id && assessment.createdBy === currentUser.id && !(assessment.batches || []).length),
+    ),
+    [assessments, reportBatchIds, selectedBatchId, currentUser?.id],
+  );
+  const reportAssessmentIds = useMemo(() => new Set(reportAssessments.map((assessment) => assessment.id)), [reportAssessments]);
+  const reportSubmissions = useMemo(
+    () => submissions.filter((submission) => reportStudentIds.has(submission.studentId) && reportAssessmentIds.has(submission.assessmentId)),
+    [submissions, reportStudentIds, reportAssessmentIds],
   );
 
+  // Count one result per student per assessment: use their latest submitted attempt.
+  const latestSubmittedByAssessment = (items) => {
+    const latest = new Map();
+    items.filter((item) => item.status === "submitted").forEach((item) => {
+      const key = `${item.studentId}:${item.assessmentId}`;
+      const date = Date.parse(item.submittedAt || item.startedAt || "") || 0;
+      const previous = latest.get(key);
+      if (!previous || date >= previous.date) latest.set(key, { item, date });
+    });
+    return [...latest.values()].map(({ item }) => item);
+  };
+
+  const latestSubmittedSubs = useMemo(
+    () => latestSubmittedByAssessment(reportSubmissions),
+    [reportSubmissions],
+  );
+  const evaluatedSubs = useMemo(
+    () => latestSubmittedSubs.filter((submission) => submission.isEvaluated),
+    [latestSubmittedSubs],
+  );
   const totalEvaluatedCount = evaluatedSubs.length;
 
   const averageScore = useMemo(
-    () => totalEvaluatedCount > 0 ? Math.round(evaluatedSubs.reduce((sum, s) => sum + (s.percentage || 0), 0) / totalEvaluatedCount) : 0,
-    [evaluatedSubs, totalEvaluatedCount]
+    () => totalEvaluatedCount > 0 ? Math.round(evaluatedSubs.reduce((sum, submission) => sum + (submission.percentage || 0), 0) / totalEvaluatedCount) : 0,
+    [evaluatedSubs, totalEvaluatedCount],
   );
-
-  const highestScore = useMemo(
-    () => totalEvaluatedCount > 0 ? Math.max(...evaluatedSubs.map((s) => s.percentage || 0)) : 0,
-    [evaluatedSubs, totalEvaluatedCount]
+  const highestScore = totalEvaluatedCount > 0 ? Math.max(...evaluatedSubs.map((submission) => submission.percentage || 0)) : 0;
+  const lowestScore = totalEvaluatedCount > 0 ? Math.min(...evaluatedSubs.map((submission) => submission.percentage || 0)) : 0;
+  const assessmentById = useMemo(
+    () => new Map(reportAssessments.map((assessment) => [assessment.id, assessment])),
+    [reportAssessments],
   );
+  const passPercent = totalEvaluatedCount > 0
+    ? Math.round((evaluatedSubs.filter((submission) => {
+        const threshold = assessmentById.get(submission.assessmentId)?.passingMarks ?? 75;
+        return (submission.percentage || 0) >= threshold;
+      }).length / totalEvaluatedCount) * 100)
+    : 0;
+  const failPercent = totalEvaluatedCount > 0 ? 100 - passPercent : 0;
 
-  const lowestScore = useMemo(
-    () => totalEvaluatedCount > 0 ? Math.min(...evaluatedSubs.map((s) => s.percentage || 0)) : 0,
-    [evaluatedSubs, totalEvaluatedCount]
-  );
+  const batchComparisonData = useMemo(() => reportBatches.map((batch) => {
+    const batchStudents = reportStudents.filter((student) => (student.batches || []).includes(batch.id));
+    const batchStudentIds = new Set(batchStudents.map((student) => student.id));
+    const batchAssessmentIds = new Set(reportAssessments.filter((assessment) => assessment.status !== "draft" && (assessment.batches || []).includes(batch.id)).map((assessment) => assessment.id));
+    const batchLatestSubs = latestSubmittedByAssessment(reportSubmissions.filter((submission) =>
+      batchStudentIds.has(submission.studentId) && batchAssessmentIds.has(submission.assessmentId),
+    ));
+    const batchEvaluated = batchLatestSubs.filter((submission) => submission.isEvaluated);
+    const average = batchEvaluated.length > 0
+      ? Math.round(batchEvaluated.reduce((sum, submission) => sum + (submission.percentage || 0), 0) / batchEvaluated.length)
+      : 0;
+    const expected = batchAssessmentIds.size * batchStudentIds.size;
+    const submissionRate = expected > 0 ? Math.round((batchLatestSubs.length / expected) * 100) : 0;
+    return { name: batch.name, averageScore: average, submissionRate };
+  }), [reportBatches, reportStudents, reportAssessments, reportSubmissions]);
 
-  const passPercent = useMemo(
-    () => totalEvaluatedCount > 0 ? Math.round((evaluatedSubs.filter((s) => (s.percentage || 0) >= 60).length / totalEvaluatedCount) * 100) : 0,
-    [evaluatedSubs, totalEvaluatedCount]
-  );
+  const scoreDistribution = useMemo(() => [
+    { name: "Excellent (90-100)", value: evaluatedSubs.filter((submission) => (submission.percentage || 0) >= 90).length, color: CHART_COLORS.velvet },
+    { name: "Above Avg (75-89)", value: evaluatedSubs.filter((submission) => (submission.percentage || 0) >= 75 && (submission.percentage || 0) < 90).length, color: CHART_COLORS.teal },
+    { name: "Satisfactory (60-74)", value: evaluatedSubs.filter((submission) => (submission.percentage || 0) >= 60 && (submission.percentage || 0) < 75).length, color: CHART_COLORS.orange },
+    { name: "Below 60", value: evaluatedSubs.filter((submission) => (submission.percentage || 0) < 60).length, color: CHART_COLORS.rose },
+  ], [evaluatedSubs]);
+  const hasScoreData = scoreDistribution.some((entry) => entry.value > 0);
 
-  const failPercent = 100 - passPercent;
-
-  const batchComparisonData = useMemo(() => {
-    if (batches.length === 0) return [];
-    return batches.map((b) => {
-      const bStudents = students.filter((s) => (s.batches || []).includes(b.id));
-      const bAssessments = assessments.filter((a) => (a.batches || []).includes(b.id));
-      const bAsIds = bAssessments.map((a) => a.id);
-      const bSubs = submissions.filter((s) => bAsIds.includes(s.assessmentId) && s.status === "submitted");
-
-      const bAvg = bStudents.length > 0
-        ? Math.round(bStudents.reduce((sum, s) => sum + (s.averageScore || 0), 0) / bStudents.length)
-        : 0;
-      const expected = bAssessments.length * bStudents.length;
-      const subRate = expected > 0 ? Math.round((bSubs.length / expected) * 100) : 0;
-
-      return { name: b.name, averageScore: bAvg, submissionRate: subRate };
-    });
-  }, [batches, students, assessments, submissions]);
-
-  const scoreDistribution = useMemo(() => {
-    const dist = [
-      { name: "Excellent (90-100)", value: evaluatedSubs.filter((s) => (s.percentage || 0) >= 90).length, color: CHART_COLORS.velvet },
-      { name: "Above Avg (75-89)", value: evaluatedSubs.filter((s) => (s.percentage || 0) >= 75 && (s.percentage || 0) < 90).length, color: CHART_COLORS.teal },
-      { name: "Satisfactory (60-74)", value: evaluatedSubs.filter((s) => (s.percentage || 0) >= 60 && (s.percentage || 0) < 75).length, color: CHART_COLORS.orange },
-      { name: "Failing (<60)", value: evaluatedSubs.filter((s) => (s.percentage || 0) < 60).length, color: CHART_COLORS.rose },
-    ];
-    return dist;
-  }, [evaluatedSubs]);
-
-  const hasScoreData = scoreDistribution.some((d) => d.value > 0);
-
-  const filteredStudents = useMemo(() => {
-    return students.filter((s) => {
-      const matchesSearch = s.name?.toLowerCase().includes(studentSearch.toLowerCase()) || s.email?.toLowerCase().includes(studentSearch.toLowerCase());
-      const matchesBatch = selectedBatchId === "all" || (s.batches || []).includes(selectedBatchId);
-      return matchesSearch && matchesBatch;
-    });
-  }, [students, studentSearch, selectedBatchId]);
+  const filteredStudents = useMemo(() => reportStudents.filter((student) =>
+    student.name?.toLowerCase().includes(studentSearch.toLowerCase()) || student.email?.toLowerCase().includes(studentSearch.toLowerCase()),
+  ), [reportStudents, studentSearch]);
 
   // ── Animation Variants ──
   const containerVariants = {
@@ -159,7 +187,7 @@ export const Reports = () => {
       icon: CheckCircle2,
       bg: "bg-[#01AC9F]/10",
       color: "text-[#01AC9F]",
-      desc: "Threshold: >= 60%",
+      desc: "Uses each assessment’s passing score",
     },
     {
       label: "Fail Rate",
@@ -167,7 +195,9 @@ export const Reports = () => {
       icon: AlertTriangle,
       bg: "bg-rose-500/10",
       color: "text-rose-500",
-      desc: failPercent > 30 ? "Needs attention" : "Within acceptable range",
+      desc: totalEvaluatedCount === 0
+        ? "No evaluated submissions yet"
+        : failPercent > 30 ? "Needs attention" : "Within acceptable range",
     },
     {
       label: "Score Range",
@@ -211,7 +241,7 @@ export const Reports = () => {
           <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">Performance Reports</h1>
           <p className="mt-2 text-white/80 text-sm font-medium">
             {totalEvaluatedCount > 0
-              ? `Analytics from ${totalEvaluatedCount} evaluated submission${totalEvaluatedCount !== 1 ? "s" : ""} across ${batches.length} batch${batches.length !== 1 ? "es" : ""}`
+              ? `Analytics from ${totalEvaluatedCount} evaluated submission${totalEvaluatedCount !== 1 ? "s" : ""} across ${reportBatches.length} batch${reportBatches.length !== 1 ? "es" : ""}`
               : "No evaluated submissions yet. Data will appear once students complete assessments."}
           </p>
         </div>
@@ -350,7 +380,7 @@ export const Reports = () => {
                 className="py-1.5 px-3 bg-gray-50 dark:bg-[#1a1a2e] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-xs focus:outline-none focus:ring-2 focus:ring-[#6C1D5F]/30 dark:text-white cursor-pointer"
               >
                 <option value="all">All Batches</option>
-                {batches.map((b) => (
+                {reportBatches.map((b) => (
                   <option key={b.id} value={b.id}>{b.name}</option>
                 ))}
               </select>
@@ -380,9 +410,9 @@ export const Reports = () => {
                 </tr>
               ) : (
                 filteredStudents.slice(0, 15).map((stud, idx) => {
-                  const bName = batches.find((b) => (stud.batches || []).includes(b.id))?.name || "—";
-                  const studSubs = submissions.filter((s) => s.studentId === stud.id && s.status === "submitted");
-                  const studEvaluated = studSubs.filter((s) => s.isEvaluated);
+                  const bName = reportBatches.find((b) => (stud.batches || []).includes(b.id))?.name || "—";
+                  const studSubs = latestSubmittedSubs.filter((submission) => submission.studentId === stud.id);
+                  const studEvaluated = studSubs.filter((submission) => submission.isEvaluated);
                   const assessmentsDone = studSubs.length;
                   const score = studEvaluated.length > 0
                     ? Math.round(studEvaluated.reduce((sum, s) => sum + (s.percentage || 0), 0) / studEvaluated.length)
