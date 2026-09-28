@@ -232,7 +232,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                 negativeMarksValue: config.quickSettings?.negativeMarksValue || 25,
                 shuffleQuestions: config.quickSettings?.shuffleQuestions || false,
                 autoSubmit: config.quickSettings?.autoSubmit || false,
-                passingMarks: config.passingMarks || 75,
+                passingMarks: config.passingMarks ?? 75,
               };
               try {
                 if (initialAssessment) {
@@ -421,7 +421,7 @@ export const EnterpriseBuilderLayout = ({ onBack, initialAssessment }) => {
                       negativeMarksValue: config.quickSettings?.negativeMarksValue || 25,
                       shuffleQuestions: config.quickSettings?.shuffleQuestions || false,
                       autoSubmit: config.quickSettings?.autoSubmit || false,
-                      passingMarks: config.passingMarks || 75,
+                      passingMarks: config.passingMarks ?? 75,
                     };
 
                     try {

@@ -546,7 +546,7 @@ export const ConfigPanel = ({ config, setConfig }) => {
                     </label>
                     <input
                       type="number"
-                      value={config.passingMarks || ""}
+                      value={config.passingMarks ?? ""}
                       onChange={(e) =>
                         setConfig((prev) => ({ ...prev, passingMarks: e.target.value }))
                       }

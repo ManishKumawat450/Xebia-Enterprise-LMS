@@ -27,7 +27,7 @@ export const Results = () => {
 
   const assessment = assessments.find((a) => a.id === submission.assessmentId);
   const student = students.find((s) => s.id === submission.studentId);
-  const passingMarks = assessment?.passingMarks || 75;
+  const passingMarks = assessment?.passingMarks ?? 75;
 
   if (!assessment) {
     return (

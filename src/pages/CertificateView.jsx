@@ -264,7 +264,7 @@ export const CertificateView = () => {
     !assessment ||
     !student ||
     !submission.isEvaluated ||
-    submission.percentage < (assessment.passingMarks || 75)
+    submission.percentage < (assessment.passingMarks ?? 75)
   ) {
     return <Navigate to="/student/results" replace />;
   }
