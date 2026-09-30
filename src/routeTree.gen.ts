@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as TrainerRouteImport } from './routes/trainer'
 import { Route as StudentRouteImport } from './routes/student'
+import { Route as ChangePasswordRouteImport } from './routes/change-password'
 import { Route as AnalyticsRouteImport } from './routes/analytics'
 import { Route as AdminRouteImport } from './routes/admin'
 import { Route as IndexRouteImport } from './routes/index'
@@ -91,6 +92,11 @@ const TrainerRoute = TrainerRouteImport.update({
 const StudentRoute = StudentRouteImport.update({
   id: '/student',
   path: '/student',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const ChangePasswordRoute = ChangePasswordRouteImport.update({
+  id: '/change-password',
+  path: '/change-password',
   getParentRoute: () => rootRouteImport,
 } as any)
 const AnalyticsRoute = AnalyticsRouteImport.update({
@@ -468,6 +474,7 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/student': typeof StudentRouteWithChildren
   '/trainer': typeof TrainerRouteWithChildren
   '/admin/assessments': typeof AdminAssessmentsRouteWithChildren
@@ -542,6 +549,7 @@ export interface FileRoutesByFullPath {
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/analytics': typeof AnalyticsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/admin/notifications': typeof AdminNotificationsRoute
   '/admin/organiser': typeof AdminOrganiserRoute
   '/admin/trainer': typeof AdminTrainerRoute
@@ -613,6 +621,7 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/admin': typeof AdminRouteWithChildren
   '/analytics': typeof AnalyticsRoute
+  '/change-password': typeof ChangePasswordRoute
   '/student': typeof StudentRouteWithChildren
   '/trainer': typeof TrainerRouteWithChildren
   '/admin/assessments': typeof AdminAssessmentsRouteWithChildren
@@ -690,6 +699,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/analytics'
+    | '/change-password'
     | '/student'
     | '/trainer'
     | '/admin/assessments'
@@ -764,6 +774,7 @@ export interface FileRouteTypes {
   to:
     | '/'
     | '/analytics'
+    | '/change-password'
     | '/admin/notifications'
     | '/admin/organiser'
     | '/admin/trainer'
@@ -834,6 +845,7 @@ export interface FileRouteTypes {
     | '/'
     | '/admin'
     | '/analytics'
+    | '/change-password'
     | '/student'
     | '/trainer'
     | '/admin/assessments'
@@ -910,6 +922,7 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AdminRoute: typeof AdminRouteWithChildren
   AnalyticsRoute: typeof AnalyticsRoute
+  ChangePasswordRoute: typeof ChangePasswordRoute
   StudentRoute: typeof StudentRouteWithChildren
   TrainerRoute: typeof TrainerRouteWithChildren
 }
@@ -928,6 +941,13 @@ declare module '@tanstack/react-router' {
       path: '/student'
       fullPath: '/student'
       preLoaderRoute: typeof StudentRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/change-password': {
+      id: '/change-password'
+      path: '/change-password'
+      fullPath: '/change-password'
+      preLoaderRoute: typeof ChangePasswordRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/analytics': {
@@ -1626,6 +1646,7 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AdminRoute: AdminRouteWithChildren,
   AnalyticsRoute: AnalyticsRoute,
+  ChangePasswordRoute: ChangePasswordRoute,
   StudentRoute: StudentRouteWithChildren,
   TrainerRoute: TrainerRouteWithChildren,
 }

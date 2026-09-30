@@ -19,10 +19,12 @@ function getActiveUserId() {
 }
 
 async function fetchApi(endpoint, options = {}) {
+  const token = typeof window !== "undefined" ? localStorage.getItem("lms_token") : null;
   const headers = {
     "Content-Type": "application/json",
     "X-Tenant-Id": "123e4567-e89b-12d3-a456-426614174000",
     "X-User-Id": getActiveUserId(),
+    ...(token ? { Authorization: `Bearer ${token}` } : {}),
     ...options.headers,
   };
 
@@ -132,6 +134,24 @@ export const CourseService = {
     fetchApi(`/courses/content-items/${contentId}`, { method: "DELETE" }),
 };
 
+export const AuthService = {
+  login: (email, password) =>
+    fetchApi("/v1/auth/login", {
+      method: "POST",
+      body: JSON.stringify({ email, password }),
+    }),
+  changePassword: (currentPassword, newPassword) =>
+    fetchApi("/v1/auth/change-password", {
+      method: "POST",
+      body: JSON.stringify({ currentPassword, newPassword }),
+    }),
+  setTemporaryPassword: (userId, temporaryPassword) =>
+    fetchApi(`/v1/auth/admin/users/${userId}/temporary-password`, {
+      method: "POST",
+      body: JSON.stringify({ temporaryPassword }),
+    }),
+};
+
 export const UserService = {
   getUsers: (role) => fetchApi(`/v1/users${role ? "?role=" + role : ""}`),
   getUser: (id) => fetchApi(`/v1/users/${id}`),
@@ -153,8 +173,7 @@ export const NotificationService = {
 export const FeedbackService = {
   submitFeedback: (data) =>
     fetchApi("/v1/feedback", { method: "POST", body: JSON.stringify(data) }),
-  getFeedback: (studentId) =>
-    fetchApi(`/v1/feedback${studentId ? "?studentId=" + studentId : ""}`),
+  getFeedback: (studentId) => fetchApi(`/v1/feedback${studentId ? "?studentId=" + studentId : ""}`),
 };
 
 export const TrainerCascadeService = {
@@ -193,9 +212,7 @@ export const AssessmentService = {
 
 export const SubmissionService = {
   getSubmissions: async (studentId) => {
-    const data = await fetchApi(
-      `/v1/submissions${studentId ? "?studentId=" + studentId : ""}`,
-    );
+    const data = await fetchApi(`/v1/submissions${studentId ? "?studentId=" + studentId : ""}`);
     return (data || []).map((sub) => ({
       ...sub,
       answers: sub.answers?.map((a) => {
@@ -309,11 +326,15 @@ export const AllocationService = {
     return fetchApi(`/v1/allocations${qs ? "?" + qs : ""}`);
   },
   getAllocationById: (id) => fetchApi(`/v1/allocations/${id}`),
-  createAllocation: (data) => fetchApi("/v1/allocations", { method: "POST", body: JSON.stringify(data) }),
-  updateAllocation: (id, data) => fetchApi(`/v1/allocations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  createAllocation: (data) =>
+    fetchApi("/v1/allocations", { method: "POST", body: JSON.stringify(data) }),
+  updateAllocation: (id, data) =>
+    fetchApi(`/v1/allocations/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteAllocation: (id) => fetchApi(`/v1/allocations/${id}`, { method: "DELETE" }),
-  deleteAllocationsByBatch: (batchId) => fetchApi(`/v1/allocations/batch/${batchId}`, { method: "DELETE" }),
-  createBulkAllocations: (allocations) => fetchApi("/v1/allocations/bulk", { method: "POST", body: JSON.stringify(allocations) }),
+  deleteAllocationsByBatch: (batchId) =>
+    fetchApi(`/v1/allocations/batch/${batchId}`, { method: "DELETE" }),
+  createBulkAllocations: (allocations) =>
+    fetchApi("/v1/allocations/bulk", { method: "POST", body: JSON.stringify(allocations) }),
   getDashboardSummary: () => fetchApi("/v1/allocations/dashboard"),
   getAnalytics: () => fetchApi("/v1/allocations/analytics"),
   getTrainerAllocations: (trainerId) => fetchApi(`/v1/allocations/trainer/${trainerId}`),
@@ -341,7 +362,8 @@ export const EventService = {
   getEvents: () => fetchApi("/v1/events"),
   getEventById: (id) => fetchApi(`/v1/events/${id}`),
   createEvent: (data) => fetchApi("/v1/events", { method: "POST", body: JSON.stringify(data) }),
-  updateEvent: (id, data) => fetchApi(`/v1/events/${id}`, { method: "PUT", body: JSON.stringify(data) }),
+  updateEvent: (id, data) =>
+    fetchApi(`/v1/events/${id}`, { method: "PUT", body: JSON.stringify(data) }),
   deleteEvent: (id) => fetchApi(`/v1/events/${id}`, { method: "DELETE" }),
   registerForEvent: (eventId) => fetchApi(`/v1/events/${eventId}/register`, { method: "POST" }),
   cancelRegistration: (eventId) => fetchApi(`/v1/events/${eventId}/register`, { method: "DELETE" }),

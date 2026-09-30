@@ -19,3 +19,13 @@ spring:
       hibernate:
         format_sql: true
         dialect: org.hibernate.dialect.PostgreSQLDialect
+
+lms:
+  jwt:
+    secret: ${JWT_SECRET:}
+    issuer: ${JWT_ISSUER:enterprise-lms}
+    access-token-minutes: ${JWT_ACCESS_TOKEN_MINUTES:30}
+  bootstrap-admin:
+    email: ${BOOTSTRAP_ADMIN_EMAIL:}
+    name: ${BOOTSTRAP_ADMIN_NAME:Admin User}
+    initial-password: ${BOOTSTRAP_ADMIN_INITIAL_PASSWORD:}

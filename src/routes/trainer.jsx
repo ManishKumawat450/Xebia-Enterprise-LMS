@@ -17,12 +17,25 @@ function TrainerLayout() {
   }, []);
 
   useEffect(() => {
-    if (mounted && (!currentUser || currentUser.role !== "teacher")) {
+    if (!mounted) return;
+    if (currentUser?.mustChangePassword) {
+      navigate({ to: "/change-password", replace: true });
+    } else if (
+      !currentUser ||
+      currentUser.role !== "teacher" ||
+      !localStorage.getItem("lms_token")
+    ) {
       navigate({ to: "/", replace: true });
     }
   }, [mounted, currentUser, navigate]);
 
-  if (!mounted || !currentUser || currentUser.role !== "teacher") {
+  if (
+    !mounted ||
+    !currentUser ||
+    currentUser.role !== "teacher" ||
+    currentUser.mustChangePassword ||
+    (typeof window !== "undefined" && !window.localStorage.getItem("lms_token"))
+  ) {
     return null; // Don't render layout while mounting or redirecting
   }
 

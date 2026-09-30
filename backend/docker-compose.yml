@@ -71,7 +71,11 @@ services:
       DB_NAME: lms
       DB_USERNAME: lms
       DB_PASSWORD: lms
-      JWT_SECRET: ${JWT_SECRET:-replace-with-at-least-32-characters}
+      JWT_SECRET: ${JWT_SECRET:-}
+      JWT_ACCESS_TOKEN_MINUTES: ${JWT_ACCESS_TOKEN_MINUTES:-30}
+      BOOTSTRAP_ADMIN_EMAIL: ${BOOTSTRAP_ADMIN_EMAIL:-}
+      BOOTSTRAP_ADMIN_NAME: ${BOOTSTRAP_ADMIN_NAME:-Admin User}
+      BOOTSTRAP_ADMIN_INITIAL_PASSWORD: ${BOOTSTRAP_ADMIN_INITIAL_PASSWORD:-}
     ports:
       - "8081:8081"
     depends_on:

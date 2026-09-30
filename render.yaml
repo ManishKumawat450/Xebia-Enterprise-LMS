@@ -30,6 +30,16 @@ services:
     envVars:
       - key: SERVER_PORT
         value: "8081"
+      - key: JWT_SECRET
+        sync: false
+      - key: JWT_ACCESS_TOKEN_MINUTES
+        value: "30"
+      - key: BOOTSTRAP_ADMIN_EMAIL
+        value: admin@xebia.com
+      - key: BOOTSTRAP_ADMIN_NAME
+        value: Admin User
+      - key: BOOTSTRAP_ADMIN_INITIAL_PASSWORD
+        sync: false
       - key: DB_HOST
         fromDatabase:
           name: xebia-postgres-mritunjai

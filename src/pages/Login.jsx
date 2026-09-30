@@ -8,47 +8,43 @@ import { motion, AnimatePresence } from "framer-motion";
 export const Login = () => {
   const { login, teachers, students, theme, toggleTheme } = useLMS();
   const [email, setEmail] = useState("");
+  const [password, setPassword] = useState("");
   const [role, setRole] = useState("teacher");
+  const [isSubmitting, setIsSubmitting] = useState(false);
   const navigate = useNavigate();
 
-  const handleLoginSubmit = (e) => {
+  const handleLoginSubmit = async (e) => {
     e.preventDefault();
-    if (!email) {
-      toast.add("Please enter your email address", "warning");
+    if (!email || !password) {
+      toast.add("Enter both your email address and password", "warning");
       return;
     }
 
-    if (role === "admin") {
-      toast.add("Login Successful! Welcome back.", "success");
-      navigate({ to: "/admin" });
-      return;
-    }
-
-    const success = login(email, role);
-    if (success) {
-      toast.add("Login Successful! Welcome back.", "success");
-      navigate({ to: role === "teacher" ? "/trainer" : "/student" });
-    } else {
-      toast.add(
-        `Could not find a ${role} with that email. Try using the quick accounts selector.`,
-        "error",
-      );
+    setIsSubmitting(true);
+    try {
+      const user = await login(email, password);
+      toast.add("Login successful. Welcome back.", "success");
+      if (user.mustChangePassword) {
+        navigate({ to: "/change-password" });
+      } else {
+        const actualRole = String(user.role).toLowerCase();
+        navigate({
+          to:
+            actualRole === "admin" ? "/admin" : actualRole === "teacher" ? "/trainer" : "/student",
+        });
+      }
+    } catch (error) {
+      toast.add(error?.message || "Invalid email or password", "error");
+    } finally {
+      setIsSubmitting(false);
     }
   };
 
   const handleQuickLogin = (quickEmail, quickRole) => {
     setEmail(quickEmail);
     setRole(quickRole);
-    if (quickRole === "admin") {
-      toast.add(`Logged in successfully!`, "success");
-      navigate({ to: "/admin" });
-      return;
-    }
-    const success = login(quickEmail, quickRole);
-    if (success) {
-      toast.add(`Logged in successfully!`, "success");
-      navigate({ to: quickRole === "teacher" ? "/trainer" : "/student" });
-    }
+    setPassword("");
+    toast.add("Account selected. Enter its password to continue.", "warning");
   };
 
   const demoTeachers = teachers.slice(0, 3);
@@ -233,15 +229,37 @@ export const Login = () => {
                   </div>
                 </div>
 
+                {/* Password Input */}
+                <div className="space-y-2">
+                  <label
+                    htmlFor="login-password"
+                    className="block text-sm font-bold text-neutral-700 dark:text-neutral-200 ml-1"
+                  >
+                    Password
+                  </label>
+                  <input
+                    id="login-password"
+                    type="password"
+                    value={password}
+                    onChange={(e) => setPassword(e.target.value)}
+                    autoComplete="current-password"
+                    required
+                    className="w-full px-5 py-4 bg-white/70 dark:bg-[#1a1020]/50 backdrop-blur-md border border-neutral-300/80 dark:border-[#6C1D5F]/30 rounded-2xl text-base focus:outline-none focus:ring-4 focus:ring-[#6C1D5F]/20 dark:focus:ring-[#84117C]/30 focus:border-[#6C1D5F] dark:focus:border-[#84117C] dark:text-white transition-all shadow-sm"
+                  />
+                </div>
+
                 {/* Submit Button */}
                 <motion.button
                   whileHover={{ scale: 1.02 }}
                   whileTap={{ scale: 0.98 }}
                   type="submit"
+                  disabled={isSubmitting}
                   className="w-full py-4 px-6 bg-gradient-to-r from-[#6C1D5F] to-[#84117C] text-white rounded-2xl text-sm font-black uppercase tracking-wide transition-all shadow-[0_8px_30px_rgb(108,29,95,0.3)] flex items-center justify-center gap-2 cursor-pointer overflow-hidden relative group"
                 >
                   <div className="absolute inset-0 bg-white/20 translate-y-full group-hover:translate-y-0 transition-transform duration-300 ease-out" />
-                  <span className="relative z-10">Access Portal</span>
+                  <span className="relative z-10">
+                    {isSubmitting ? "Signing in…" : "Access Portal"}
+                  </span>
                   <ArrowRight className="w-5 h-5 relative z-10 group-hover:translate-x-1.5 transition-transform" />
                 </motion.button>
               </form>

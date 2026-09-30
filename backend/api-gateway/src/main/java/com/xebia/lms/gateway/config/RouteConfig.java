@@ -21,6 +21,7 @@ public class RouteConfig {
                 .route("course-service-categories", route -> route.path("/api/categories", "/api/categories/**").filters(filter -> filter.stripPrefix(1)).uri(serviceUrl("course", "http://course-service:8084")))
                 .route("course-service-enrollments", route -> route.path("/api/enrollments", "/api/enrollments/**").filters(filter -> filter.stripPrefix(1)).uri(serviceUrl("course", "http://course-service:8084")))
                 .route("course-service-progress", route -> route.path("/api/progress", "/api/progress/**").filters(filter -> filter.stripPrefix(1)).uri(serviceUrl("course", "http://course-service:8084")))
+                .route("user-service-auth", route -> route.path("/api/v1/auth", "/api/v1/auth/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))
                 .route("user-service", route -> route.path("/api/v1/users", "/api/v1/users/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))
                 .route("user-service-feedback", route -> route.path("/api/v1/feedback", "/api/v1/feedback/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))
                 .route("user-service-notifications", route -> route.path("/api/v1/notifications", "/api/v1/notifications/**").filters(filter -> filter.stripPrefix(0)).uri(serviceUrl("user", "http://user-service:8081")))

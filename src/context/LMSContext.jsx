@@ -1,6 +1,7 @@
 import React, { createContext, useContext, useState, useEffect } from "react";
 
 import {
+  AuthService,
   UserService,
   BatchService,
   AssessmentService,
@@ -298,26 +299,21 @@ export const LMSProvider = ({ children }) => {
     setNotifications((prev) => [newNotif, ...prev]);
   };
 
-  // Fake Auth
-  const login = (email, role) => {
-    const cleanEmail = email.trim().toLowerCase();
-    if (role === "teacher") {
-      const match = teachers.find((t) => t.email.toLowerCase() === cleanEmail);
-      if (match) {
-        setCurrentUser(match);
-        return true;
-      }
-    } else {
-      const match = students.find((s) => s.email.toLowerCase() === cleanEmail);
-      if (match) {
-        setCurrentUser(match);
-        return true;
-      }
+  const login = async (email, password) => {
+    const result = await AuthService.login(email, password);
+    const { token, ...user } = result;
+    if (!token || !user.id || !user.role) {
+      throw new Error("The authentication service returned an invalid response");
     }
-    return false;
+    localStorage.setItem("lms_token", token);
+    localStorage.setItem("session", JSON.stringify(user));
+    setCurrentUser(user);
+    return user;
   };
 
   const logout = () => {
+    localStorage.removeItem("lms_token");
+    localStorage.removeItem("session");
     setCurrentUser(null);
   };
 

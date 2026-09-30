@@ -17,12 +17,25 @@ function StudentLayout() {
   }, []);
 
   useEffect(() => {
-    if (mounted && (!currentUser || currentUser.role !== "student")) {
+    if (!mounted) return;
+    if (currentUser?.mustChangePassword) {
+      navigate({ to: "/change-password", replace: true });
+    } else if (
+      !currentUser ||
+      currentUser.role !== "student" ||
+      !localStorage.getItem("lms_token")
+    ) {
       navigate({ to: "/", replace: true });
     }
   }, [mounted, currentUser, navigate]);
 
-  if (!mounted || !currentUser || currentUser.role !== "student") {
+  if (
+    !mounted ||
+    !currentUser ||
+    currentUser.role !== "student" ||
+    currentUser.mustChangePassword ||
+    (typeof window !== "undefined" && !window.localStorage.getItem("lms_token"))
+  ) {
     return null; // Don't render layout while mounting or redirecting
   }
 

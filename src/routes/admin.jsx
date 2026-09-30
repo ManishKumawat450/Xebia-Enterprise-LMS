@@ -1,4 +1,4 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useState, useEffect } from "react";
 import { UnifiedLayout } from "@/components/layout/unified-layout";
 
@@ -7,13 +7,27 @@ export const Route = createFileRoute("/admin")({
 });
 
 function AdminLayout() {
-  const [mounted, setMounted] = useState(false);
+  const [authorizedForUi, setAuthorizedForUi] = useState(false);
+  const navigate = useNavigate();
 
   useEffect(() => {
-    setMounted(true);
-  }, []);
+    try {
+      const token = localStorage.getItem("lms_token");
+      const user = JSON.parse(localStorage.getItem("session") || "null");
+      if (!token || String(user?.role || "").toLowerCase() !== "admin") {
+        navigate({ to: "/" });
+        return;
+      }
+      if (user.mustChangePassword) {
+        navigate({ to: "/change-password" });
+        return;
+      }
+      setAuthorizedForUi(true);
+    } catch {
+      navigate({ to: "/" });
+    }
+  }, [navigate]);
 
-  if (!mounted) return null;
-
+  if (!authorizedForUi) return null;
   return <UnifiedLayout portalType="admin" />;
 }

@@ -1,5 +1,6 @@
 package com.xebia.userservice.model;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
 import jakarta.persistence.*;
 import lombok.*;
 
@@ -25,4 +26,11 @@ public class User {
     // Student specific stats
     private Integer averageScore;
     private Integer assessmentsCompleted;
+
+    // BCrypt hash only; never serialize credential material to API responses.
+    @JsonIgnore
+    private String passwordHash;
+
+    @JsonIgnore
+    private Boolean mustChangePassword = false;
 }
