@@ -1,4 +1,5 @@
 import React, { useState, useEffect, useRef } from "react";
+import { AuthService } from "@/services/api";
 import {
   Search,
   Menu,
@@ -102,10 +103,17 @@ export function StudentNavbar({ isMobileOpen, setIsMobileOpen }) {
 
   // Settings Menu
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [settingsTab, setSettingsTab] = useState("profile");
 
   // Profile State
   const [tempProfile, setTempProfile] = useState(null);
   const fileInputRef = useRef(null);
+
+  // Change Password State
+  const [currentPw, setCurrentPw] = useState("");
+  const [newPw, setNewPw] = useState("");
+  const [confirmPw, setConfirmPw] = useState("");
+  const [isChangingPw, setIsChangingPw] = useState(false);
 
   // Initialize temp profile when modal opens
   useEffect(() => {
@@ -116,6 +124,8 @@ export function StudentNavbar({ isMobileOpen, setIsMobileOpen }) {
         university: "Xebia University",
         image: null,
       });
+      setSettingsTab("profile");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
     }
   }, [isSettingsOpen]);
 
@@ -130,8 +140,25 @@ export function StudentNavbar({ isMobileOpen, setIsMobileOpen }) {
     }
   };
 
+  const handleChangePassword = async (e) => {
+    e.preventDefault();
+    if (!currentPw || !newPw || !confirmPw) { addToast("Please fill in all fields", "warning"); return; }
+    if (newPw !== confirmPw) { addToast("New passwords do not match!", "warning"); return; }
+    if (newPw.length < 12 || newPw.length > 72) { addToast("Password must be 12–72 characters", "warning"); return; }
+    setIsChangingPw(true);
+    try {
+      await AuthService.changePassword(currentPw, newPw);
+      addToast("Password updated successfully!", "success");
+      setCurrentPw(""); setNewPw(""); setConfirmPw("");
+      setIsSettingsOpen(false);
+    } catch (err) {
+      addToast(err.message || "Failed to update password. Check your current password.", "error");
+    } finally {
+      setIsChangingPw(false);
+    }
+  };
+
   const saveSettings = () => {
-    // In a real app, you would call an API to update the profile here.
     addToast("Settings saved successfully.", "success");
     setIsSettingsOpen(false);
   };
@@ -272,102 +299,94 @@ export function StudentNavbar({ isMobileOpen, setIsMobileOpen }) {
       {isSettingsOpen && tempProfile && (
         <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4 animate-in fade-in duration-200">
           <div className="bg-white dark:bg-[#15151f] rounded-2xl w-full max-w-md overflow-hidden shadow-2xl relative animate-in zoom-in-95 duration-200 border border-gray-100 dark:border-[#2e2e3e]">
+            {/* Header */}
             <div className="px-6 py-4 border-b border-gray-100 dark:border-[#2e2e3e] flex items-center justify-between">
               <h2 className="text-lg font-bold text-gray-900 dark:text-white">Account Settings</h2>
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-xl font-bold p-1"
-              >
-                ✕
-              </button>
+              <button onClick={() => setIsSettingsOpen(false)} className="text-gray-400 hover:text-gray-600 dark:hover:text-gray-200 transition-colors text-xl font-bold p-1">✕</button>
             </div>
 
-            <div className="p-6 space-y-6">
-              <div className="flex flex-col items-center gap-3">
-                <input
-                  type="file"
-                  ref={fileInputRef}
-                  onChange={handleImageUpload}
-                  className="hidden"
-                  accept="image/png, image/jpeg"
-                />
-                <div
-                  className="w-24 h-24 rounded-full bg-[#6C1D5F] flex items-center justify-center text-4xl font-bold text-white cursor-pointer hover:bg-[#84117C] transition-colors relative group overflow-hidden"
-                  onClick={() => fileInputRef.current?.click()}
+            {/* Tabs */}
+            <div className="flex border-b border-gray-100 dark:border-[#2e2e3e]">
+              {[{ id: "profile", label: "Profile" }, { id: "password", label: "Change Password" }].map(tab => (
+                <button
+                  key={tab.id}
+                  onClick={() => setSettingsTab(tab.id)}
+                  className={`flex-1 py-2.5 text-sm font-bold transition-colors ${
+                    settingsTab === tab.id
+                      ? "text-[#6C1D5F] border-b-2 border-[#6C1D5F]"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200"
+                  }`}
                 >
-                  {tempProfile.image ? (
-                    <img
-                      src={tempProfile.image}
-                      alt="Profile"
-                      className="w-full h-full object-cover"
-                    />
-                  ) : (
-                    initials
-                  )}
-                  <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
-                    <span className="text-white text-xs font-semibold text-center leading-tight px-2">
-                      Change Image
-                    </span>
+                  {tab.label}
+                </button>
+              ))}
+            </div>
+
+            {/* Profile Tab */}
+            {settingsTab === "profile" && (
+              <>
+                <div className="p-6 space-y-5">
+                  <div className="flex flex-col items-center gap-3">
+                    <input type="file" ref={fileInputRef} onChange={handleImageUpload} className="hidden" accept="image/png, image/jpeg" />
+                    <div
+                      className="w-20 h-20 rounded-full bg-[#6C1D5F] flex items-center justify-center text-3xl font-bold text-white cursor-pointer hover:bg-[#84117C] transition-colors relative group overflow-hidden"
+                      onClick={() => fileInputRef.current?.click()}
+                    >
+                      {tempProfile.image ? <img src={tempProfile.image} alt="Profile" className="w-full h-full object-cover" /> : initials}
+                      <div className="absolute inset-0 bg-black/40 flex items-center justify-center opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span className="text-white text-xs font-semibold px-2 text-center">Change</span>
+                      </div>
+                    </div>
+                    <p className="text-xs text-gray-500">Max 2MB (JPG, PNG)</p>
+                  </div>
+                  <div className="space-y-3">
+                    <div className="space-y-1">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Full Name</label>
+                      <input type="text" value={tempProfile.name} onChange={(e) => setTempProfile({ ...tempProfile, name: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Email Address</label>
+                      <input type="email" value={tempProfile.email} onChange={(e) => setTempProfile({ ...tempProfile, email: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                    </div>
+                    <div className="space-y-1">
+                      <label className="text-sm font-bold text-gray-700 dark:text-gray-300">University</label>
+                      <input type="text" value={tempProfile.university} onChange={(e) => setTempProfile({ ...tempProfile, university: e.target.value })} className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                    </div>
                   </div>
                 </div>
-                <div className="text-sm font-medium text-gray-500 dark:text-gray-400">
-                  Max size 2MB (JPG, PNG)
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-[#2e2e3e] flex justify-end gap-3">
+                  <button onClick={() => setIsSettingsOpen(false)} className="px-5 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 transition-colors">Cancel</button>
+                  <button onClick={saveSettings} className="px-5 py-2 text-sm font-bold bg-[#6C1D5F] hover:bg-[#84117C] text-white rounded-xl shadow-lg transition-all">Save Changes</button>
                 </div>
-              </div>
+              </>
+            )}
 
-              <div className="space-y-4">
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                    Full Name
-                  </label>
-                  <input
-                    type="text"
-                    value={tempProfile.name}
-                    onChange={(e) => setTempProfile({ ...tempProfile, name: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all"
-                  />
+            {/* Change Password Tab */}
+            {settingsTab === "password" && (
+              <form onSubmit={handleChangePassword}>
+                <div className="p-6 space-y-4">
+                  <p className="text-xs text-gray-500 dark:text-gray-400">New password must be 12–72 characters.</p>
+                  <div className="space-y-1">
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Current Password</label>
+                    <input type="password" value={currentPw} onChange={e => setCurrentPw(e.target.value)} placeholder="Enter current password" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300">New Password</label>
+                    <input type="password" value={newPw} onChange={e => setNewPw(e.target.value)} placeholder="Enter new password" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                  </div>
+                  <div className="space-y-1">
+                    <label className="text-sm font-bold text-gray-700 dark:text-gray-300">Confirm New Password</label>
+                    <input type="password" value={confirmPw} onChange={e => setConfirmPw(e.target.value)} placeholder="Confirm new password" className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all" />
+                  </div>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                    Email Address
-                  </label>
-                  <input
-                    type="email"
-                    value={tempProfile.email}
-                    onChange={(e) => setTempProfile({ ...tempProfile, email: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all"
-                  />
+                <div className="px-6 py-4 border-t border-gray-100 dark:border-[#2e2e3e] flex justify-end gap-3">
+                  <button type="button" onClick={() => setIsSettingsOpen(false)} className="px-5 py-2 text-sm font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 transition-colors">Cancel</button>
+                  <button type="submit" disabled={isChangingPw} className="px-5 py-2 text-sm font-bold bg-[#6C1D5F] hover:bg-[#84117C] disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-xl shadow-lg transition-all">
+                    {isChangingPw ? "Updating..." : "Update Password"}
+                  </button>
                 </div>
-
-                <div className="space-y-1.5">
-                  <label className="text-sm font-bold text-gray-700 dark:text-gray-300">
-                    University
-                  </label>
-                  <input
-                    type="text"
-                    value={tempProfile.university}
-                    onChange={(e) => setTempProfile({ ...tempProfile, university: e.target.value })}
-                    className="w-full px-4 py-2 bg-gray-50 dark:bg-[#1a1a24] border border-gray-200 dark:border-[#2e2e3e] rounded-xl text-sm text-gray-900 dark:text-white outline-none focus:ring-2 focus:ring-[#6C1D5F]/20 focus:border-[#6C1D5F] transition-all"
-                  />
-                </div>
-              </div>
-            </div>
-
-            <div className="px-6 py-4 border-t border-gray-100 dark:border-[#2e2e3e] flex items-center justify-end gap-3 bg-white dark:bg-[#15151f]">
-              <button
-                onClick={() => setIsSettingsOpen(false)}
-                className="px-5 py-2.5 text-sm font-bold text-gray-600 dark:text-gray-300 hover:text-gray-900 dark:hover:text-white transition-colors"
-              >
-                Cancel
-              </button>
-              <button
-                onClick={saveSettings}
-                className="px-5 py-2.5 text-sm font-bold bg-[#6C1D5F] hover:bg-[#84117C] text-white rounded-xl shadow-lg transition-all"
-              >
-                Save Changes
-              </button>
-            </div>
+              </form>
+            )}
           </div>
         </div>
       )}

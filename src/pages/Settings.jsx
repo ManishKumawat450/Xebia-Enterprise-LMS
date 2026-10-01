@@ -1,6 +1,7 @@
 import React, { useState } from "react";
 import { useLMS } from "../context/LMSContext";
 import { toast } from "../components/Toast";
+import { AuthService } from "../services/api";
 import {
   User,
   Lock,
@@ -125,21 +126,34 @@ export const Settings = () => {
     }
   };
 
-  const handleUpdatePassword = (e) => {
+  const [isChangingPassword, setIsChangingPassword] = useState(false);
+
+  const handleUpdatePassword = async (e) => {
     e.preventDefault();
     if (!currentPassword || !newPassword || !confirmPassword) {
-      toast.add("Please populate all password parameters", "warning");
+      toast.add("Please fill in all password fields", "warning");
       return;
     }
     if (newPassword !== confirmPassword) {
       toast.add("New passwords do not match!", "warning");
       return;
     }
-
-    toast.add("Password updated securely!", "success");
-    setCurrentPassword("");
-    setNewPassword("");
-    setConfirmPassword("");
+    if (newPassword.length < 12 || newPassword.length > 72) {
+      toast.add("New password must be 12–72 characters", "warning");
+      return;
+    }
+    setIsChangingPassword(true);
+    try {
+      await AuthService.changePassword(currentPassword, newPassword);
+      toast.add("Password updated successfully!", "success");
+      setCurrentPassword("");
+      setNewPassword("");
+      setConfirmPassword("");
+    } catch (err) {
+      toast.add(err.message || "Failed to update password. Check your current password.", "error");
+    } finally {
+      setIsChangingPassword(false);
+    }
   };
 
   const handleSaveNotifications = (e) => {
@@ -392,10 +406,11 @@ export const Settings = () => {
 
               <button
                 type="submit"
-                className="py-2.5 px-5 bg-[#6C1D5F] hover:bg-[#84117C] text-white rounded-2xl font-bold shadow-md cursor-pointer flex items-center gap-1.5"
+                disabled={isChangingPassword}
+                className="py-2.5 px-5 bg-[#6C1D5F] hover:bg-[#84117C] disabled:opacity-60 disabled:cursor-not-allowed text-white rounded-2xl font-bold shadow-md cursor-pointer flex items-center gap-1.5"
               >
                 <Lock className="w-4 h-4" />
-                <span>Update Password Credentials</span>
+                <span>{isChangingPassword ? "Updating..." : "Update Password"}</span>
               </button>
             </motion.form>
           )}
