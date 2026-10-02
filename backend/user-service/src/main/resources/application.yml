@@ -29,3 +29,7 @@ lms:
     email: ${BOOTSTRAP_ADMIN_EMAIL:}
     name: ${BOOTSTRAP_ADMIN_NAME:Admin User}
     initial-password: ${BOOTSTRAP_ADMIN_INITIAL_PASSWORD:}
+
+groq:
+  api:
+    key: ${GROQ_API_KEY:}

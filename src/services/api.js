@@ -152,6 +152,15 @@ export const AuthService = {
     }),
 };
 
+// messages: [{role: "user"|"assistant", content: string}]
+export const ChatService = {
+  send: (messages) =>
+    fetchApi("/v1/chat", {
+      method: "POST",
+      body: JSON.stringify({ messages }),
+    }),
+};
+
 export const UserService = {
   getUsers: (role) => fetchApi(`/v1/users${role ? "?role=" + role : ""}`),
   getUser: (id) => fetchApi(`/v1/users/${id}`),

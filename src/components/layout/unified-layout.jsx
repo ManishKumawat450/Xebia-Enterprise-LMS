@@ -4,6 +4,7 @@ import { UnifiedSidebar } from "./unified-sidebar";
 import { StudentNavbar } from "./student-navbar";
 import { Header as AdminHeader } from "@/admin/components/layout/Header";
 import { useAppStore } from "@/admin/store/useAppStore";
+import { StudentChatbot } from "@/components/StudentChatbot";
 
 export function UnifiedLayout({ portalType = "student" }) {
   const [isMobileOpen, setIsMobileOpen] = useState(false);
@@ -43,6 +44,9 @@ export function UnifiedLayout({ portalType = "student" }) {
           )}
         </div>
       </div>
+
+      {/* Student chatbot — floating, only for students */}
+      {portalType === "student" && <StudentChatbot />}
     </div>
   );
 }
