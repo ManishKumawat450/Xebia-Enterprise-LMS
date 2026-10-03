@@ -12,17 +12,18 @@
 
 ![React](https://img.shields.io/badge/React-19.2-61DAFB?logo=react&logoColor=white)
 ![Spring Boot](https://img.shields.io/badge/Spring_Boot-3.3.6-6DB33F?logo=springboot&logoColor=white)
-![Java](https://img.shields.io/badge/Java-21-ED8B00?logo=openjdk&logoColor=white)
+![Java](https://img.shields.io/badge/Java-17-ED8B00?logo=openjdk&logoColor=white)
 ![PostgreSQL](https://img.shields.io/badge/PostgreSQL-16-4169E1?logo=postgresql&logoColor=white)
 ![Redis](https://img.shields.io/badge/Redis-7-DC382D?logo=redis&logoColor=white)
 ![Docker](https://img.shields.io/badge/Docker-Compose-2496ED?logo=docker&logoColor=white)
 ![Tailwind](https://img.shields.io/badge/Tailwind_CSS-4.2-06B6D4?logo=tailwindcss&logoColor=white)
-![License](https://img.shields.io/badge/License-MIT-blue)
+![License](https://img.shields.io/badge/License-Private-blue)
 ![Last Commit](https://img.shields.io/github/last-commit/mritunjai-prog/Xebia-Enterprise-LMS)
 
 <br/>
 
-An enterprise LMS featuring **three portal roles** (Admin, Trainer, Student), a microservices backend with **6 Spring Boot services**, a React 19 frontend with TanStack Router, and a Docker-based development environment. Built for Xebia to deliver structured learning with assessments, course management, batch allocation, event hosting, and rich analytics dashboards.
+
+An enterprise LMS featuring three portal roles (Admin, Trainer, Student), a microservices backend with 6 Spring Boot services, a React 19 frontend with TanStack Router, and a Docker-based development environment.The current code also includes selected BCrypt/JWT authentication flows, a Groq-backed Student Study Bot, and Groq-assisted assessment-description generation. Built for Xebia, the LMS supports course management, batch allocation, assessments, events, and analytics dashboards.
 
 **[🚀 Live Demo](https://xebia-enterprise-lms.vercel.app)** &nbsp;·&nbsp; **[🐛 Report Bug](https://github.com/mritunjai-prog/Xebia-Enterprise-LMS/issues)** &nbsp;·&nbsp; **[✨ Request Feature](https://github.com/mritunjai-prog/Xebia-Enterprise-LMS/issues)**
 
@@ -82,7 +83,7 @@ An enterprise LMS featuring **three portal roles** (Admin, Trainer, Student), a 
 - ✅ Trainer Dashboard
 - ✅ Batch management
 - ✅ Assessment Builder with question types (MCQ, Coding, Mixed, True/False, Multi-Select)
-- ✅ Student evaluation and grading
+- ✅ Student evaluation and grading with backend persistence
 - ✅ Leaderboard and reports
 - ✅ Event viewing (read-only)
 - ✅ Settings
@@ -91,22 +92,28 @@ An enterprise LMS featuring **three portal roles** (Admin, Trainer, Student), a 
 - ✅ Student Dashboard with progress tracking
 - ✅ Course browsing and enrollment
 - ✅ Batch viewing
-- ✅ Assessment taking (MCQ, Coding, Mixed)
+- ✅ Assessment taking (MCQ, Coding, Mixed); student-safe listing omits answer keys and explanations
 - ✅ Results with certificates
-- ✅ Notifications and feedback
+- ✅ Notifications and feedback synchronized with the backend
 - ✅ Event discovery and registration
-- ✅ Profile management
+- ✅ Profile management (profile updates persist through the User Service)
+- ✅ Floating Student Study Bot for general programming and LMS-navigation help
+- ✅ Chat request limits: 20 messages, 800 characters per message, 15-second HTTP timeout, 512-token output cap
 
 **Backend**
 - ✅ 6 microservices (API Gateway, User, Course, Batch, Assessment, Event)
 - ✅ Bulk User creation API (`POST /api/v1/users/bulk`)
 - ✅ Multi-tenant architecture with `TenantScopedEntity`
 - ✅ Docker Compose orchestration
-- ✅ API Gateway routing with service discovery
+- ✅ API Gateway path routing and CORS
+- ✅ BCrypt password verification and JWT sign-in/password-management flows in User Service
+- ✅ Groq-backed Student Study Bot (`POST /api/v1/chat`) with JWT and STUDENT-role validation
+- ✅ Groq-assisted assessment-description generation
 
 ### 🚧 In Progress / Planned
 
-- 🚧 JWT authentication (currently using fake-auth pattern)
+- 🚧 Platform-wide JWT validation and role-based authorization across protected domain APIs (selected User Service endpoints already validate tokens)
+- 🚧 Course-grounded Study Bot responses using lesson retrieval/RAG
 - 🚧 WebSocket real-time notifications
 - 🚧 Course video streaming
 - 🚧 Mobile responsive optimization
@@ -135,6 +142,11 @@ An enterprise LMS featuring **three portal roles** (Admin, Trainer, Student), a 
 | **Cache** | Redis | 7 | Session and data caching |
 | **Containerization** | Docker Compose | — | Multi-service orchestration |
 | **Build Tool** | Maven | 3.9.6 | Java dependency management |
+| **Password Hashing** | BCrypt | — | Password verification in User Service |
+| **Authentication** | JWT | Configurable; 30-minute default | Token issuance and validation on selected User Service endpoints |
+| **AI API** | Groq | `openai/gpt-oss-120b` | Student chat and assessment-description generation |
+
+> **AI key note:** `GROQ_API_KEY` is used for backend AI calls. Existing browser-side AI helpers also use `VITE_GROQ_API_KEY`, which is exposed in the client bundle and is not a server-side secret. The Study Bot uses the server-side key. Do not commit actual key or password values.
 
 ---
 
@@ -142,7 +154,7 @@ An enterprise LMS featuring **three portal roles** (Admin, Trainer, Student), a 
 
 ### System Overview
 
-The application follows a **microservices architecture** with a single API Gateway acting as the entry point. The React frontend communicates exclusively through the gateway, which routes requests to the appropriate backend service.
+The application follows a **microservices architecture** with an API Gateway for LMS REST routing and CORS. The Gateway routes by path but does not globally validate JWTs. Selected User Service endpoints perform their own token/role checks. Existing browser-side AI helpers call Groq directly; the Student Study Bot routes through the Gateway to User Service.
 
 ```mermaid
 flowchart LR
@@ -150,6 +162,8 @@ flowchart LR
         A[Admin Portal] --> GW
         B[Trainer Portal] --> GW
         C[Student Portal] --> GW
+        SB[StudentChatbot] --> GW
+        BAI[Existing Browser AI Helpers]
     end
 
     subgraph Gateway["🔀 API Gateway :8080"]
@@ -169,9 +183,16 @@ flowchart LR
         RD[(Redis 7)]
     end
 
+    subgraph ExternalAI["☁️ External AI"]
+        GR[Groq API<br/>openai/gpt-oss-120b]
+    end
+
     GW --> US & CS & BS & AS & ES
     US & CS & BS & AS & ES --> PG
     CS & AS --> RD
+    US --> GR
+    AS --> GR
+    BAI -. VITE_GROQ_API_KEY .-> GR
 ```
 
 ### Request Flow
@@ -184,13 +205,31 @@ sequenceDiagram
     participant D as PostgreSQL
 
     C->>G: GET /api/v1/events
-    G->>G: Route matching + stripPrefix
+    G->>G: Match configured path route and filters
     G->>S: Forward to event-service:8087
     S->>D: JPA query
     D-->>S: ResultSet
     S-->>G: JSON response
     G-->>C: 200 OK + JSON
 ```
+
+### Student Study Bot Request Flow
+
+```mermaid
+sequenceDiagram
+    participant UI as StudentChatbot
+    participant G as API Gateway
+    participant U as User Service ChatController
+    participant AI as Groq API
+    UI->>G: POST /api/v1/chat + Bearer JWT
+    G->>U: Route /api/v1/chat (forward header)
+    U->>U: Validate JWT, STUDENT role, and request bounds
+    U->>AI: Send conversation + fixed system prompt
+    AI-->>U: General study response
+    U-->>UI: Reply
+```
+
+The Gateway performs path routing/CORS only; it is not a global JWT filter. `fetchApi` sends `Authorization: Bearer <JWT>` when `lms_token` is present and retains the existing `X-Tenant-Id` and `X-User-Id` headers; this does not secure APIs that do not validate the token. The chatbot does not fetch course lessons or student profile records. User-submitted conversation messages are sent to Groq.
 
 ---
 
@@ -220,7 +259,7 @@ cd backend
 docker compose up --build -d
 ```
 
-This starts 8 containers: API Gateway, User Service, Course Service, Batch Service, Assessment Service, Event Service, PostgreSQL, and Redis.
+This starts 8 containers: API Gateway, User Service, Course Service, Batch Service, Assessment Service, Event Service, PostgreSQL, and Redis. For local authentication/chat, configure the environment variables listed below; never commit secret values.
 
 **3. Install frontend dependencies**
 ```bash
@@ -238,20 +277,29 @@ The app will be available at **http://localhost:3000**.
 ### Verifying the Setup
 
 1. **Frontend**: Open `http://localhost:3000` — you should see the login page
-2. **Backend Gateway**: Visit `http://localhost:8080/api/v1/users` — should return `[]` (empty array)
+2. **Backend Gateway**: Visit `http://localhost:8080/api/v1/users` — expect a JSON user list; contents depend on the database and bootstrap configuration.
 3. **Docker Status**: Run `docker ps` — all 8 containers should show `Up` status
 
 ---
 
 ## 📡 API Documentation
 
-### User Service (`/api/v1/users`)
+### User Service, Authentication, and Chat (`/api/v1/*`)
 
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/users` | List all users (optional `?role=` filter) |
 | POST | `/api/v1/users` | Create a single user |
+| GET | `/api/v1/users/{id}` | Read a user profile |
+| PUT | `/api/v1/users/{id}` | Update a user profile |
 | POST | `/api/v1/users/bulk` | Bulk create users (JSON array, any size) |
+| POST | `/api/v1/auth/login` | Verify password with BCrypt and return a short-lived JWT |
+| POST | `/api/v1/auth/change-password` | Change password for the authenticated user |
+| POST | `/api/v1/auth/admin/users/{userId}/temporary-password` | Admin-only temporary-password provisioning |
+| POST | `/api/v1/chat` | Student-only Groq Study Bot; validates JWT and STUDENT role |
+| GET / POST | `/api/v1/feedback` | Read or submit student feedback |
+| GET | `/api/v1/notifications` | Read persisted notifications |
+| POST | `/api/v1/notifications/sync` | Synchronize notifications with the backend |
 
 ### Course Service (`/api/courses`, `/api/categories`)
 
@@ -293,12 +341,16 @@ The app will be available at **http://localhost:3000**.
 | Method | Endpoint | Description |
 |--------|----------|-------------|
 | GET | `/api/v1/assessments` | List all assessments |
+| GET | `/api/v1/assessments/student` | Student-safe list without answer keys/explanations |
 | POST | `/api/v1/assessments` | Create assessment |
 | PUT | `/api/v1/assessments/{id}` | Update assessment |
 | DELETE | `/api/v1/assessments/{id}` | Delete assessment |
 | GET | `/api/v1/assessments/dashboard` | Admin dashboard data |
 | GET | `/api/v1/assessments/analytics` | Admin analytics data |
-| POST | `/api/v1/submissions` | Submit assessment attempt |
+| POST | `/api/v1/assessments/ai/generate-description` | Groq-assisted assessment-description generation |
+| GET / POST / DELETE | `/api/v1/assessments/drafts/{studentId}/{assessmentId}` | Retrieve, save, or delete a draft |
+| POST | `/api/v1/submissions` | Create a submission record |
+| PUT / DELETE | `/api/v1/submissions/{id}` | Update or delete a submission record |
 | GET | `/api/v1/submissions` | List submissions |
 
 ### Event Service (`/api/v1/events`)
@@ -333,6 +385,8 @@ erDiagram
         string avatar
         float averageScore
         int assessmentsCompleted
+        string passwordHash "BCrypt hash; never plaintext"
+        boolean mustChangePassword
     }
 
     COURSES {
@@ -348,6 +402,7 @@ erDiagram
         uuid id PK
         string name
         string slug
+        string icon
         string description
         string color
         boolean active
@@ -367,12 +422,27 @@ erDiagram
     ASSESSMENTS {
         uuid id PK
         string title
+        text description
+        text instructions
         string type
         string difficulty
         int marks
         int duration
         string status
         string[] batches
+    }
+
+    QUESTIONS {
+        uuid id PK
+        uuid assessmentId FK
+        text question
+        text correctAnswer
+        text explanation
+    }
+
+    QUESTION_OPTIONS {
+        uuid questionId FK
+        text options
     }
 
     SUBMISSIONS {
@@ -424,10 +494,13 @@ erDiagram
     CATEGORIES ||--o{ COURSES : belongs_to
     COURSES ||--o{ ENROLLMENTS : has
     USERS ||--o{ ENROLLMENTS : enrolled_in
+    ASSESSMENTS ||--o{ QUESTIONS : contains
     ASSESSMENTS ||--o{ SUBMISSIONS : has
     USERS ||--o{ SUBMISSIONS : submitted
     EVENTS ||--o{ EVENT_REGISTRATIONS : has
 ```
+
+`passwordHash` is a BCrypt hash, never plaintext; both `passwordHash` and `mustChangePassword` are excluded from public User JSON. Assessment startup code converts selected description, instruction, question, answer, explanation, and option columns to `TEXT`; the live database state must be verified separately. The Course Service also includes a migration to widen the category icon column to `TEXT`.
 
 ---
 
@@ -445,7 +518,8 @@ Xebia-Enterprise-LMS/
 │   │   │   ├── categories/           # Category management routes
 │   │   │   ├── curriculum/           # Curriculum builder routes
 │   │   │   └── events/               # Event management routes
-│   │   ├── student/                  # Student portal routes (16 files)
+│   │   ├── student/                  # Student portal routes
+│   │   ├── change-password.jsx        # Shared password-change route
 │   │   └── trainer/                  # Trainer portal routes (9 files)
 │   ├── admin/                        # Admin portal pages & components
 │   │   ├── pages/                    # Page components
@@ -462,6 +536,7 @@ Xebia-Enterprise-LMS/
 │   │   ├── services/                 # Admin API service
 │   │   └── store/                    # Zustand store
 │   ├── components/                   # Shared components
+│   │   ├── StudentChatbot.jsx         # Floating Student Study Bot
 │   │   ├── ui/                       # 46 shadcn/ui components
 │   │   ├── layout/                   # Unified sidebar, header
 │   │   ├── assessment-admin/         # Assessment cards, report table
@@ -481,7 +556,11 @@ Xebia-Enterprise-LMS/
 │   ├── pom.xml                       # Parent Maven POM
 │   ├── common-lib/                   # Shared library (BaseEntity, TenantScopedEntity, security)
 │   ├── api-gateway/                  # Spring Cloud Gateway (:8080)
-│   ├── user-service/                 # User management (:8081)
+│   ├── user-service/                 # Users, auth, chat (:8081)
+│   │   ├── controller/AuthController.java
+│   │   ├── controller/ChatController.java
+│   │   ├── service/AuthService.java
+│   │   └── security/                  # BCrypt and JWT utilities
 │   ├── course-service/               # Courses, categories, enrollments (:8084)
 │   ├── batch-service/                # Batches, trainer allocations (:8085)
 │   ├── assessment-service/           # Assessments, submissions, AI (:8086)
@@ -524,6 +603,8 @@ All backend services are deployed on Render using `render.yaml`:
 - Backend services are deployed on Render (Docker-based)
 - PostgreSQL is managed by Render
 
+**Chatbot deployment note:** the checked `render.yaml` does not list `GROQ_API_KEY` for User Service. Configure the key in the hosted service environment and verify the deployed build before claiming the hosted chatbot is operational.
+
 ### Environment Variables
 
 <details>
@@ -537,7 +618,12 @@ All backend services are deployed on Render using `render.yaml`:
 | `DB_USERNAME` | All | Database user | `postgres` |
 | `DB_PASSWORD` | All | Database password | — |
 | `REDIS_HOST` | Gateway, Course, Assessment | Redis host | `localhost` |
-| `JWT_SECRET` | All | JWT signing secret | — |
+| `JWT_SECRET` | Backend config; active token operations in User Service | Strong JWT signing/validation secret (at least 32 random bytes); do not expose the value | — |
+| `JWT_ACCESS_TOKEN_MINUTES` | User Service | JWT lifetime (default 30 minutes) | `30` |
+| `BOOTSTRAP_ADMIN_EMAIL` | User Service | Admin bootstrap email | — |
+| `BOOTSTRAP_ADMIN_NAME` | User Service | Admin bootstrap display name | `Admin User` |
+| `BOOTSTRAP_ADMIN_INITIAL_PASSWORD` | User Service | Initial bootstrap password; configure together with the bootstrap email; never publish the value | — |
+| `GROQ_API_KEY` | User Service, Assessment Service | Server-side Groq API calls | — |
 | `SERVICES_COURSE` | Gateway | Course service URL | `http://course-service:8084` |
 | `SERVICES_USER` | Gateway | User service URL | `http://user-service:8081` |
 | `SERVICES_BATCH` | Gateway | Batch service URL | `http://batch-service:8085` |
@@ -554,6 +640,7 @@ All backend services are deployed on Render using `render.yaml`:
 | `VITE_API_BASE_URL` | Backend API base URL | `http://localhost:8080/api` |
 | `VITE_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | `your-cloud-name` |
 | `VITE_CLOUDINARY_UPLOAD_PRESET` | Cloudinary upload preset | `your-preset` |
+| `VITE_GROQ_API_KEY` | Existing browser-side AI helpers; exposed in the client bundle, not a server-side secret | — |
 
 </details>
 
@@ -561,7 +648,7 @@ All backend services are deployed on Render using `render.yaml`:
 
 ## 🔥 Load Testing & Performance
 
-The full API suite was **load tested with 50 concurrent requests** per endpoint using a Node.js `Promise.all()` harness — simulating 50 students hitting the system simultaneously.
+The documented CRUD load test covered **20 endpoints across five services**, using 50 concurrent requests per phase with a Node.js `Promise.all()` harness. It reports 1,000 total requests and a 100% pass result; it was not a load test of every API endpoint.
 
 ### Infrastructure Configuration
 
@@ -582,6 +669,7 @@ The full API suite was **load tested with 50 concurrent requests** per endpoint 
 | **Event Service** | ✅ 50/50 | ✅ 50/50 | ✅ 50/50 | ✅ 50/50 | 🟢 PASS |
 
 > **Total: 1,000 records tested** — 50 concurrent × 4 CRUD phases × 5 services. Zero failures after infrastructure tuning.
+> **Coverage note:** the reported CRUD test does not include login, password-change, JWT-validation, or chatbot endpoints. No performance result for those endpoints is claimed here.
 
 ### Key Business Rule Validated
 
@@ -633,6 +721,14 @@ The full API suite was **load tested with 50 concurrent requests** per endpoint 
 - [x] API Gateway concurrency raised to 500 connections
 - [x] Comprehensive HTML API Testing Report (`Xebia_LMS_API_Documentation.html`)
 - [x] Production databases cleaned post-testing (clean state)
+
+### Authentication and AI Study Assistant
+- [x] BCrypt password verification and short-lived JWT sign-in flows in User Service.
+- [x] Selected User Service endpoints validate JWTs; ChatController also checks the STUDENT role.
+- [x] Groq-backed Student Study Bot for general programming help, practice prompts, study tips, and LMS navigation.
+- [x] Groq-assisted assessment-description generation.
+- [ ] Extend JWT validation and role checks across protected domain APIs.
+- [ ] Add course-grounded chatbot retrieval/citations (RAG).
 
 ---
 
