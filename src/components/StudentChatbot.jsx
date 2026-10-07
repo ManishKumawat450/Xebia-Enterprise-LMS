@@ -44,8 +44,14 @@ export function StudentChatbot() {
     setIsLoading(true);
 
     try {
-      // Send only the last 20 messages (backend cap)
-      const context = nextMessages.slice(-20);
+      // Send only the last 20 messages (backend cap).
+      // Truncate assistant messages to 800 chars to satisfy the backend
+      // MAX_CONTENT_LENGTH limit — the full reply is still shown in the UI.
+      const context = nextMessages.slice(-20).map((msg) =>
+        msg.role === "assistant" && msg.content.length > 800
+          ? { ...msg, content: msg.content.slice(0, 800) }
+          : msg
+      );
       const data = await ChatService.send(context);
       setMessages((prev) => [...prev, { role: "assistant", content: data.reply }]);
     } catch (err) {
